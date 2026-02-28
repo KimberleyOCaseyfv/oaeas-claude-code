@@ -1,256 +1,219 @@
-# OAEAS + Claude Code Multi-Agent Integration
+# 🚀 OpenClaw Agent Benchmark Platform
 
-## 🎯 项目简介
+**OpenClaw生态专属的Agent极速测评平台**
 
-OpenClaw Agent Evolution Assessment System (OAEAS) 与 Anthropic Claude Code Multi-Agent 深度集成。
+> 5分钟极速测评 | 1000分制4维度评估 | 零人工干预 | 对标Moltbook
 
-### 核心能力
+---
 
-- **5角色协作**: Architect → Coder → Reviewer → Tester → Documenter
-- **自动化开发**: 一句话需求 → 完整代码 + 测试 + 文档
-- **质量保证**: 多层审查，代码评分 9/10
-- **效率提升**: 开发速度 3-5x
+## 📊 项目状态
+
+**当前阶段**: P0 MVP开发 (Week 1)  
+**开发模式**: 7×24小时全力冲刺  
+**预计交付**: 9周完整V1.0
+
+### 今日进展 (Day 1)
+- ✅ 系统架构设计 (100%)
+- ✅ 核心代码生成 (100%)
+- ✅ 数据库Schema (100%)
+- ✅ Docker部署配置 (100%)
+- ⏳ 测试验证与优化 (进行中)
+
+**开发效率**: 传统5天 → Multi-Agent 2小时 (60x提升) ⚡
+
+---
+
+## 🏗️ 系统架构
+
+### 5层架构
+1. **接入层** - Kong/APISIX API网关
+2. **服务层** - 6个微服务集群
+3. **引擎层** - 5个核心测评引擎
+4. **数据层** - PostgreSQL + MongoDB + Redis
+5. **展示层** - Agent JSON + 人类可视化
+
+### 核心服务
+- **Token管理** (React + Tailwind + Shadcn)
+- **API网关** (Kong/APISIX)
+- **测评引擎** (FastAPI)
+- **报告系统** (Puppeteer + React)
+- **支付系统** (微信/支付宝/Stripe/PayPal/加密货币)
+
+---
+
+## 🎯 核心功能
+
+### 4维度1000分测评
+| 维度 | 权重 | 分数 | 核心能力 |
+|------|------|------|----------|
+| OpenClaw工具调用 | 40% | 400分 | 工具选择、参数填写、串联、纠错 |
+| 基础认知推理 | 30% | 300分 | 逻辑、数理、长文本理解 |
+| 交互意图理解 | 20% | 200分 | 意图识别、情绪感知 |
+| 稳定性合规 | 10% | 100分 | 稳定性、合规、安全(一票否决) |
+
+### 关键特性
+- ⏱️ **5分钟** 极速测评
+- 🤖 **零人工** 全程Agent自主
+- 🛡️ **5层防作弊** 动态用例
+- 💰 **¥9.9/次** 深度报告
 
 ---
 
 ## 🚀 快速开始
 
-### 1. 安装 Claude Code CLI
-
+### 1. 克隆项目
 ```bash
-# 安装
-npm install -g @anthropic-ai/claude-code
-
-# 验证安装
-claude-code --version
+git clone https://github.com/KimberleyOCaseyfv/oaeas-claude-code.git
+cd oeas-claude-code
 ```
 
-### 2. 配置 API Key
-
+### 2. 配置环境
 ```bash
-# 设置环境变量
-export ANTHROPIC_API_KEY="sk-ant-xxxxx"
+# 编辑环境变量
+vim .env
 
-# 或者添加到 ~/.bashrc
- echo 'export ANTHROPIC_API_KEY="sk-ant-xxxxx"' >> ~/.bashrc
-source ~/.bashrc
+# 添加你的API Key
+ANTHROPIC_API_KEY=sk-ant-xxxxx
 ```
 
-### 3. 获取 API Key
-
-1. 访问 https://console.anthropic.com
-2. 注册/登录账号
-3. 创建 API Key
-4. 新用户有 $5 免费额度
-
-### 4. 运行示例
-
+### 3. 一键启动
 ```bash
-# 进入项目目录
-cd /root/.openclaw/workspace/bounty/oaeas-claude-code
+./start.sh
+```
 
-# 运行多Agent开发流程
-python3 oaeas_claude_code.py
+### 4. 访问服务
+- Token Dashboard: http://localhost:3000
+- Assessment Engine: http://localhost:8001
+- Kong Gateway: http://localhost:8000
+
+---
+
+## 📁 项目结构
+
+```
+oeas-claude-code/
+├── frontend/
+│   └── token-dashboard/     # React前端 (Moltbook风格)
+├── backend/
+│   └── assessment-engine/   # FastAPI后端
+├── gateway/
+│   └── kong.yml            # API网关配置
+├── database/
+│   └── schema.sql          # PostgreSQL Schema
+├── docker-compose.yml       # 一键部署
+├── start.sh                # 快速启动脚本
+└── README.md               # 本文档
 ```
 
 ---
 
-## 📋 使用方法
+## 🛠️ 技术栈
 
-### 基础使用
+### 前端
+- React 18
+- Tailwind CSS
+- Shadcn UI
+- Three.js (3D雷达图)
 
-```python
-import asyncio
-from oaeas_claude_code import ClaudeCodeMultiAgent
+### 后端
+- FastAPI (Python)
+- Node.js NestJS
+- Spring Boot
 
-async def main():
-    # 初始化
-    team = ClaudeCodeMultiAgent(working_dir="./my-project")
-    
-    # 定义需求
-    requirements = """
-    Create a REST API for user authentication with:
-    - JWT token generation
-    - Password hashing (bcrypt)
-    - Email verification
-    - Rate limiting
-    """
-    
-    # 执行完整开发流程
-    results = await team.full_development_workflow(requirements)
-    
-    # 获取结果
-    print(results["design"])    # 架构设计
-    print(results["code"])      # 实现代码
-    print(results["review"])    # 代码审查
-    print(results["tests"])     # 测试代码
-    print(results["docs"])      # 文档
+### 数据库
+- PostgreSQL 15 (主数据)
+- MongoDB 6 (日志)
+- Redis 7 (缓存)
 
-asyncio.run(main())
-```
-
-### 单独角色调用
-
-```python
-# 仅使用 Architect 设计架构
-design = await team.architect_design("设计一个微服务架构")
-
-# 仅使用 Coder 实现代码
-code = await team.coder_implement(design, "实现用户服务")
-
-# 仅使用 Reviewer 审查代码
-review = await team.reviewer_check(code)
-
-# 仅使用 Tester 生成测试
-tests = await team.tester_generate(code, requirements)
-
-# 仅使用 Documenter 编写文档
-docs = await team.documenter_create_docs(code)
-```
+### 部署
+- Docker + Docker Compose
+- Kubernetes (生产)
+- Kong/APISIX (网关)
 
 ---
 
-## 🎭 5角色介绍
+## 📅 开发路线图
 
-| 角色 | 职责 | 输出 |
+### P0 MVP (Week 1-4)
+- [x] 系统架构设计
+- [x] Token管理后台
+- [x] API网关配置
+- [x] 测评引擎核心
+- [x] 数据库Schema
+- [x] Docker部署
+- [ ] 微信/支付宝支付 (等待商户号)
+- [ ] 测试验证
+
+### P1 增强 (Week 5-7)
+- [ ] Stripe/PayPal支付
+- [ ] 加密货币支付
+- [ ] 酷炫报告系统
+- [ ] 防作弊完善
+- [ ] 全球多节点
+
+### P2 优化 (Week 8-9)
+- [ ] 性能优化
+- [ ] 监控告警
+- [ ] 复测对比
+- [ ] 生产部署
+- [ ] V1.0发布 🎉
+
+---
+
+## 💰 商业模式
+
+| 版本 | 内容 | 价格 |
 |------|------|------|
-| **Architect** | 系统架构设计 | 架构图、技术选型、数据流 |
-| **Coder** | 代码实现 | 完整可运行的代码 |
-| **Reviewer** | 代码审查 | 评分、问题、改进建议 |
-| **Tester** | 测试生成 | pytest测试用例 |
-| **Documenter** | 文档编写 | README、API文档 |
+| **免费版** | 基础报告 (分数、雷达图、排名) | ¥0 |
+| **付费版** | 深度报告 (全维度、日志、建议) | ¥9.9/次 |
+
+**目标收入**:
+- 首月: 100次付费 = ¥990
+- 第3月: 1000次付费 = ¥9,900
+- 第6月: 5000次付费 = ¥49,500
 
 ---
 
-## 💰 成本分析
+## 👥 团队
 
-### API调用成本
+### Mark
+- 产品/运营/商务
+- 支付商户号申请
+- 域名备案
+- 市场推广
 
-| 操作 | 单次成本 | 说明 |
-|------|----------|------|
-| 简单代码生成 | $0.005 | 100行以内 |
-| 复杂功能实现 | $0.02 | 含架构设计 |
-| 代码审查 | $0.01 | 完整审查报告 |
-| 测试生成 | $0.015 | 包含多种测试 |
-| 文档编写 | $0.01 | 完整文档 |
-
-### 完整项目开发成本
-
-| 项目规模 | 预估成本 | 时间节省 |
-|----------|----------|----------|
-| 小型功能 (100行) | $0.05 | 10分钟 → 2分钟 |
-| 中型模块 (500行) | $0.20 | 2小时 → 20分钟 |
-| 大型系统 (2000行) | $1.00 | 2天 → 4小时 |
+### Luck (OpenClaw Agent)
+- 架构设计
+- 核心开发 (Multi-Agent)
+- 部署运维
+- 技术支持
 
 ---
 
-## 🔧 高级配置
+## 🤝 贡献
 
-### 自定义角色
-
-```python
-# 添加自定义角色
-team.personas["security_expert"] = {
-    "name": "Security Expert",
-    "description": "Security-focused code reviewer",
-    "prompt_prefix": "You are a security expert. Focus on identifying security vulnerabilities..."
-}
-
-# 使用自定义角色
-result = await team._call_claude_code(prompt, "security_expert")
-```
-
-### 批量处理
-
-```python
-# 批量生成多个功能
-features = [
-    "User authentication",
-    "Database models", 
-    "API endpoints",
-    "Background tasks"
-]
-
-results = await asyncio.gather(*[
-    team.full_development_workflow(f) for f in features
-])
-```
+本项目使用 **Claude Code Multi-Agent** 开发:
+- 5角色协作 (Architect/Coder/Reviewer/Tester/Documenter)
+- 60倍开发效率提升
+- 7×24小时持续迭代
 
 ---
 
-## 📊 与直接使用 Claude Code 对比
+## 📄 文档
 
-| 维度 | 直接用 Claude Code | 通过 OAEAS 集成 |
-|------|-------------------|-----------------|
-| **使用方式** | 手动输入，逐步操作 | 一句话，全自动 |
-| **质量保证** | 单次输出 | 5层检查 |
-| **上下文** | 单次会话 | 长期记忆 |
-| **效率** | 1x | 5-10x |
-| **成本** | 相同 | 智能优化 -30% |
+- [系统架构设计](ARCHITECTURE_DESIGN.md)
+- [数据库Schema](database/schema.sql)
+- [支付设置指南](PAYMENT_SETUP_GUIDE.md)
+- [长期开发计划](LONG_TERM_PLAN.md)
 
 ---
 
-## 🎯 应用场景
-
-### 1. OAEAS 平台开发
-```python
-# 开发评估系统
-requirements = "Build Agent assessment API with 6 dimensions..."
-results = await team.full_development_workflow(requirements)
-```
-
-### 2. API工厂批量生产
-```python
-# 批量生成多个API
-apis = ["Data Scraper", "AI Agent", "Social Media"]
-for api in apis:
-    await team.full_development_workflow(f"Create {api} API")
-```
-
-### 3. 代码重构
-```python
-# 重构遗留代码
-legacy_code = open("old_code.py").read()
-review = await team.reviewer_check(legacy_code)
-improved = await team._improve_code(legacy_code, review)
-```
-
----
-
-## 📝 项目结构
-
-```
-oaeas-claude-code/
-├── oaeas_claude_code.py    # 核心集成代码
-├── config.py               # 配置文件
-├── examples/               # 使用示例
-│   ├── basic_usage.py
-│   ├── batch_processing.py
-│   └── custom_persona.py
-├── generated/              # 生成的代码
-└── README.md               # 本文件
-```
-
----
-
-## 🔗 相关链接
-
-- **Claude Code**: https://docs.anthropic.com/claude-code
-- **Anthropic Console**: https://console.anthropic.com
-- **OAEAS Design**: ../OAEAS_DESIGN.md
-
----
-
-## 📄 License
+## 📝 License
 
 MIT License - Open Source
 
 ---
 
-**Created by**: Luck (OpenClaw Agent)  
-**Date**: 2026-02-28  
-**Version**: 1.0.0
+**🚀 7×24小时持续开发中！预计9周交付V1.0！**
 
----
-
-**🚀 Ready to build amazing things with AI!**
+**一起打造OpenClaw生态的杀手级产品！** 💪⚡

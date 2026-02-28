@@ -1,0 +1,244 @@
+version: '3.8'
+
+# OpenClaw Agent Benchmark Platform - Docker Compose
+# 7×24小时开发环境部署配置
+
+services:
+  # ============================================
+  # 1. PostgreSQL - 主数据库
+  # ============================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: ocb-postgres
+    environment:
+      POSTGRES_DB: ocbenchmark
+      POSTGRES_USER: ocbuser
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-ocbpassword123}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ocbuser -d ocbenchmark"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ocb-network
+
+  # ============================================
+  # 2. Redis - 缓存
+  # ============================================
+  redis:
+    image: redis:7-alpine
+    container_name: ocb-redis
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ocb-network
+
+  # ============================================
+  # 3. MongoDB - 日志存储
+  # ============================================
+  mongodb:
+    image: mongo:6-jammy
+    container_name: ocb-mongodb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ocbadmin
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-ocbpassword123}
+      MONGO_INITDB_DATABASE: ocbenchmark
+    volumes:
+      - mongodb_data:/data/db
+    ports:
+      - "27017:27017"
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ocb-network
+
+  # ============================================
+  # 4. Kong API Gateway
+  # ============================================
+  kong:
+    image: kong:3.5-alpine
+    container_name: ocb-kong
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /kong/declarative/kong.yml
+      KONG_PROXY_ACCESS_LOG: /dev/stdout
+      KONG_ADMIN_ACCESS_LOG: /dev/stdout
+      KONG_PROXY_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_ERROR_LOG: /dev/stderr
+      KONG_PLUGINS: bundled,jwt-auth
+      KONG_PROXY_LISTEN: 0.0.0.0:8000
+      KONG_ADMIN_LISTEN: 0.0.0.0:8001
+    volumes:
+      - ./gateway/kong.yml:/kong/declarative/kong.yml
+    ports:
+      - "8000:8000"   # Proxy
+      - "8001:8001"   # Admin API
+      - "8443:8443"   # Proxy SSL
+      - "8444:8444"   # Admin API SSL
+    depends_on:
+      - redis
+    healthcheck:
+      test: ["CMD", "kong", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ocb-network
+
+  # ============================================
+  # 5. Assessment Engine (FastAPI)
+  # ============================================
+  assessment-engine:
+    build:
+      context: ./backend/assessment-engine
+      dockerfile: Dockerfile
+    container_name: ocb-assessment-engine
+    environment:
+      - DATABASE_URL=postgresql://ocbuser:${DB_PASSWORD:-ocbpassword123}@postgres:5432/ocbenchmark
+      - REDIS_URL=redis://redis:6379/0
+      - MONGO_URL=mongodb://ocbadmin:${MONGO_PASSWORD:-ocbpassword123}@mongodb:27017/ocbenchmark?authSource=admin
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - JWT_SECRET=${JWT_SECRET:-ocbjwtsecret2026}
+      - ENV=development
+    volumes:
+      - ./backend/assessment-engine:/app
+      - /app/__pycache__
+    ports:
+      - "8001:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - ocb-network
+    restart: unless-stopped
+
+  # ============================================
+  # 6. Token Dashboard (React)
+  # ============================================
+  token-dashboard:
+    build:
+      context: ./frontend/token-dashboard
+      dockerfile: Dockerfile
+    container_name: ocb-token-dashboard
+    environment:
+      - REACT_APP_API_URL=http://localhost:8000
+      - REACT_APP_ENV=development
+    volumes:
+      - ./frontend/token-dashboard:/app
+      - /app/node_modules
+    ports:
+      - "3000:3000"
+    depends_on:
+      - assessment-engine
+    networks:
+      - ocb-network
+    restart: unless-stopped
+
+  # ============================================
+  # 7. MinIO - 对象存储 (报告文件)
+  # ============================================
+  minio:
+    image: minio/minio:latest
+    container_name: ocb-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ocbminio
+      MINIO_ROOT_PASSWORD: ${MINIO_PASSWORD:-ocbminio123}
+    volumes:
+      - minio_data:/data
+    ports:
+      - "9000:9000"   # API
+      - "9001:9001"   # Console
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - ocb-network
+
+  # ============================================
+  # 8. Prometheus - 监控
+  # ============================================
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: ocb-prometheus
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    networks:
+      - ocb-network
+
+  # ============================================
+  # 9. Grafana - 可视化
+  # ============================================
+  grafana:
+    image: grafana/grafana:latest
+    container_name: ocb-grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-ocbdashboard}
+    volumes:
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3001:3000"
+    depends_on:
+      - prometheus
+    networks:
+      - ocb-network
+
+# ============================================
+# 卷定义
+# ============================================
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  mongodb_data:
+    driver: local
+  minio_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+
+# ============================================
+# 网络定义
+# ============================================
+networks:
+  ocb-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
