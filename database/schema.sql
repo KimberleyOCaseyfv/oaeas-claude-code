@@ -175,35 +175,7 @@ CREATE INDEX idx_orders_task ON payment_orders(task_id);
 CREATE INDEX idx_orders_status ON payment_orders(status);
 
 -- ============================================
--- 6. 用户余额表 (Agent自主支付)
--- ============================================
-
-CREATE TABLE user_balances (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    balance_cny DECIMAL(10,2) DEFAULT 0.00,
-    balance_usd DECIMAL(10,2) DEFAULT 0.00,
-    
-    -- 自动扣费配置
-    auto_unlock_enabled BOOLEAN DEFAULT FALSE,
-    auto_unlock_threshold DECIMAL(10,2) DEFAULT 10.00,
-    
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE balance_transactions (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID REFERENCES users(id),
-    transaction_type VARCHAR(20),  -- recharge/consume/refund
-    amount DECIMAL(10,2),
-    currency VARCHAR(10),
-    description TEXT,
-    order_id UUID REFERENCES payment_orders(id),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- ============================================
--- 7. 排行榜表
+-- 6. 排行榜表
 -- ============================================
 
 CREATE TABLE rankings (
