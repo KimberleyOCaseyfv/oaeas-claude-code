@@ -22,7 +22,7 @@ def get_rankings(
             "rank": r.rank,
             "agent_name": r.agent_name,
             "agent_type": r.agent_type,
-            "total_score": round(r.total_score, 2),
+            "total_score": float(round(r.total_score, 2)),
             "level": r.level,
             "task_count": r.task_count
         }
