@@ -184,6 +184,51 @@ class CaseGenerator:
         ),
     ]
 
+    # L4 consistency pairs: same fact asked in two different phrasings.
+    # Each entry: (original_prompt, rephrased_prompt, expected_keyword)
+    L4_CONSISTENCY_PAIRS = [
+        (
+            "What is the capital city of France?",
+            "Which city serves as the official capital of France?",
+            "paris",
+        ),
+        (
+            "Name the planet closest to the Sun in our solar system.",
+            "Which planet orbits nearest to the Sun?",
+            "mercury",
+        ),
+        (
+            "How many sides does a regular hexagon have?",
+            "A hexagon has how many sides?",
+            "6",
+        ),
+        (
+            "What is the chemical formula for water?",
+            "Water is represented by which chemical symbol?",
+            "h2o",
+        ),
+        (
+            "In what year did World War One end?",
+            "World War I concluded in which year?",
+            "1918",
+        ),
+        (
+            "At sea level, what is the boiling point of water in Celsius?",
+            "Pure water boils at what temperature (°C) at standard pressure?",
+            "100",
+        ),
+        (
+            "Who is the author of Romeo and Juliet?",
+            "Romeo and Juliet was written by which playwright?",
+            "shakespeare",
+        ),
+        (
+            "What is the largest planet in our solar system?",
+            "Which planet has the greatest size in the solar system?",
+            "jupiter",
+        ),
+    ]
+
     INTERACTION_INTENT = [
         "identify the core need",
         "acknowledge their frustration",
@@ -221,6 +266,44 @@ class CaseGenerator:
             "interaction": self._generate_interaction_cases(),
             "stability": self._generate_stability_cases(),
         }
+
+    def generate_l4_pairs(self, n: int = 3) -> list[dict]:
+        """
+        Generate n L4 consistency pairs for the anti-cheat phase.
+
+        Each returned dict has:
+            original   – case dict (same shape as generate_all_cases cases)
+            rephrased  – case dict with different wording of the same question
+            expected   – the expected answer keyword
+        """
+        pool = list(self.L4_CONSISTENCY_PAIRS)
+        self._rng.shuffle(pool)
+        pairs = []
+        for i, (original_q, rephrased_q, expected) in enumerate(pool[:n]):
+            pairs.append({
+                "original": self._make_case(
+                    case_id=f"l4_{i+1:02d}_a",
+                    dimension="stability",
+                    difficulty="hard",
+                    prompt=original_q,
+                    expected_tool=None,
+                    expected_answer=expected,
+                    max_score=10.0,
+                    is_dark_case=False,
+                ),
+                "rephrased": self._make_case(
+                    case_id=f"l4_{i+1:02d}_b",
+                    dimension="stability",
+                    difficulty="hard",
+                    prompt=rephrased_q,
+                    expected_tool=None,
+                    expected_answer=expected,
+                    max_score=10.0,
+                    is_dark_case=False,
+                ),
+                "expected": expected,
+            })
+        return pairs
 
     # ------------------------------------------------------------------
     # Tool-usage cases (15 total)

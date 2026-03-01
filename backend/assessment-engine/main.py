@@ -6,15 +6,14 @@ import uvicorn
 
 from database import init_db
 from routers import tokens, assessments, reports, rankings, payments, payments_simple, auth, human_auth
+from metrics import setup_metrics
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
-    # 启动时初始化数据库
     init_db()
     print("✅ Database initialized")
     yield
-    # 关闭时的清理操作
     print("👋 Application shutting down")
 
 # 创建FastAPI应用
@@ -55,6 +54,9 @@ app.include_router(reports.router)
 app.include_router(rankings.router)
 app.include_router(payments.router)
 app.include_router(payments_simple.router)
+
+# Prometheus instrumentation (exposes /metrics)
+setup_metrics(app)
 
 @app.get("/")
 async def root():

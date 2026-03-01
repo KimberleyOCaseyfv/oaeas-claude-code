@@ -19,6 +19,8 @@ def create_token(
     """创建新的测评Token"""
     try:
         token = TokenService.create_token(db, user_id, data)
+        from metrics import record_token_created
+        record_token_created()
         return APIResponse(
             data=TokenResponse.from_orm(token)
         )

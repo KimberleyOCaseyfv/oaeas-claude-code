@@ -259,6 +259,51 @@ class ScoringEngine:
         return round(max_s * fuzzy, 2), False
 
     # ------------------------------------------------------------------
+    # L4 anti-cheat: cross-phrasing consistency check
+    # ------------------------------------------------------------------
+
+    def score_l4_consistency(
+        self,
+        resp1: dict,
+        resp2: dict,
+        expected: str,
+        max_score: float = 10.0,
+    ) -> tuple[float, bool]:
+        """
+        Score a consistency pair (same question asked twice in different wording).
+
+        Scoring:
+          - Both answers correct (contain expected keyword):  max_score      ✓ consistent
+          - Answers match each other but both wrong:          max_score * 0.5 ✓ consistent
+          - Answers contradict / differ significantly:        0.0             ✗ inconsistent
+
+        Returns (score, is_consistent).
+        """
+        ans1 = _text_of(resp1).lower()
+        ans2 = _text_of(resp2).lower()
+        exp  = expected.lower().strip()
+
+        correct1 = bool(exp) and exp in ans1
+        correct2 = bool(exp) and exp in ans2
+
+        if correct1 and correct2:
+            return max_score, True
+
+        # Check textual similarity – if both answers contain the same key tokens
+        # (even if they don't match the expected answer) count as consistent
+        tokens1 = set(re.findall(r"\b\w+\b", ans1)) - {"the", "a", "an", "is", "of", "in"}
+        tokens2 = set(re.findall(r"\b\w+\b", ans2)) - {"the", "a", "an", "is", "of", "in"}
+        if tokens1 and tokens2:
+            overlap = len(tokens1 & tokens2) / len(tokens1 | tokens2)
+        else:
+            overlap = 0.0
+
+        if overlap >= 0.35:
+            return round(max_score * 0.5, 2), True   # consistent but wrong
+
+        return 0.0, False  # inconsistent
+
+    # ------------------------------------------------------------------
     # Aggregation
     # ------------------------------------------------------------------
 

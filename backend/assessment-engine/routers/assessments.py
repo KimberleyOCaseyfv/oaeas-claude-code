@@ -142,6 +142,8 @@ def _execute_assessment(task_id: str, db: Session):
                     task.completed_at = datetime.utcnow()
                     task.duration_seconds = int((task.completed_at - task.started_at).total_seconds())
                     db.commit()
+                    from metrics import record_task_aborted
+                    record_task_aborted(veto=True)
                     return
 
                 results.append({
@@ -155,22 +157,67 @@ def _execute_assessment(task_id: str, db: Session):
                 task.cases_completed += 1
                 db.commit()
 
+        # ── Phase 5: L4 Anti-Cheat Consistency Check ───────────────────────
+        task.phase = 5
+        db.commit()
+
+        l4_pairs = gen.generate_l4_pairs(n=3)
+        consistent_count = 0
+
+        for pair in l4_pairs:
+            resp_original  = _call_agent(task, pair["original"],  sandbox, rng)
+            resp_rephrased = _call_agent(task, pair["rephrased"], sandbox, rng)
+            l4_score, is_consistent = scorer.score_l4_consistency(
+                resp_original, resp_rephrased, pair["expected"],
+                max_score=pair["original"]["max_score"],
+            )
+            if is_consistent:
+                consistent_count += 1
+
+            # Add both sub-cases to stability results
+            avg_rt = (resp_original.get("response_time_ms", 500)
+                      + resp_rephrased.get("response_time_ms", 500)) // 2
+            results.append({
+                "dimension": "stability",
+                "case_id": pair["original"]["case_id"],
+                "difficulty": "hard",
+                "score": l4_score,
+                "max_score": pair["original"]["max_score"],
+                "response_time_ms": avg_rt,
+                "l4": True,
+                "is_consistent": is_consistent,
+            })
+            task.cases_completed += 1
+
+        db.commit()
+
+        # Record L4 summary for the report
+        l4_consistency_rate = round(consistent_count / len(l4_pairs) * 100, 1) if l4_pairs else 100.0
+
         # Tally dimension scores
         dim_totals = scorer.calculate_dimension_totals(results)
 
-        task.tool_score      = dim_totals["tool_usage"]["score"]
-        task.reasoning_score = dim_totals["reasoning"]["score"]
+        task.tool_score        = dim_totals["tool_usage"]["score"]
+        task.reasoning_score   = dim_totals["reasoning"]["score"]
         task.interaction_score = dim_totals["interaction"]["score"]
-        task.stability_score = dim_totals["stability"]["score"]
-        task.total_score     = sum(v["score"] for v in dim_totals.values())
-        task.level           = _calculate_level(float(task.total_score))
-        task.status          = "completed"
-        task.completed_at    = datetime.utcnow()
-        task.duration_seconds = int((task.completed_at - task.started_at).total_seconds())
+        task.stability_score   = dim_totals["stability"]["score"]
+        task.total_score       = sum(v["score"] for v in dim_totals.values())
+        task.level             = _calculate_level(float(task.total_score))
+        task.status            = "completed"
+        task.completed_at      = datetime.utcnow()
+        task.duration_seconds  = int((task.completed_at - task.started_at).total_seconds())
         db.commit()
 
         # Generate report
-        _create_report(task, dim_totals, results, scorer, db)
+        _create_report(task, dim_totals, results, scorer, db,
+                       l4_consistency_rate=l4_consistency_rate)
+
+        # Prometheus metrics
+        from metrics import record_task_completed
+        record_task_completed(
+            duration_seconds=float(task.duration_seconds or 0),
+            l4_rate=l4_consistency_rate,
+        )
 
         # Fire webhook (non-blocking best-effort)
         if task.webhook_url:
@@ -180,6 +227,8 @@ def _execute_assessment(task_id: str, db: Session):
         task.status = "failed"
         task.veto_reason = str(exc)[:512]
         db.commit()
+        from metrics import record_task_failed
+        record_task_failed()
         if task.webhook_url:
             _fire_webhook(task, failed=True)
         raise
@@ -346,7 +395,10 @@ def _calculate_percentile(total: float, db: Session) -> float:
     return round(min(99.9, max(0.1, (lower_count / total_count) * 100)), 1)
 
 
-def _create_report(task, dim_totals: dict, results: list, scorer, db: Session):
+def _create_report(
+    task, dim_totals: dict, results: list, scorer, db: Session,
+    l4_consistency_rate: float = 100.0,
+):
     """Generate and persist the assessment report."""
     report_code = _make_report_code()
     total = float(task.total_score)
@@ -395,6 +447,7 @@ def _create_report(task, dim_totals: dict, results: list, scorer, db: Session):
             "cases_completed": task.cases_completed,
             "timeout_count": task.timeout_count,
             "veto_triggered": task.veto_triggered,
+            "l4_consistency_rate": l4_consistency_rate,
         },
     }
 
@@ -423,6 +476,8 @@ def _create_report(task, dim_totals: dict, results: list, scorer, db: Session):
 
     _update_ranking(task, db)
     db.commit()
+    from metrics import record_report_created
+    record_report_created()
 
 
 def _update_ranking(task, db: Session):
