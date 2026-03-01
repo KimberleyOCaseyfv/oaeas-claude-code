@@ -1,23 +1,24 @@
 # OAEAS Token Dashboard - Dockerfile
-FROM node:18-alpine
+FROM node:18-alpine AS builder
 
 WORKDIR /app
 
-# 复制依赖文件
-COPY package*.json ./
+# Accept API URL at build time so React embeds it in the JS bundle
+ARG REACT_APP_API_URL=http://localhost:8000
+ENV REACT_APP_API_URL=$REACT_APP_API_URL
 
-# 安装依赖
+# Install deps first (layer-cache friendly)
+COPY package*.json ./
 RUN npm install
 
-# 复制应用代码
+# Build the app
 COPY . .
-
-# 构建应用
 RUN npm run build
 
-# 使用nginx服务静态文件
+# ── Serve with nginx ──────────────────────────────────────────────────
 FROM nginx:alpine
-COPY --from=0 /app/build /usr/share/nginx/html
+
+COPY --from=builder /app/build /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 3000

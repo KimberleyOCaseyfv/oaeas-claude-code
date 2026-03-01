@@ -1,0 +1,94 @@
+version: '3.8'
+
+# OAEAS Dev Environment – lightweight (no Kong / Mongo / MinIO)
+# Usage:
+#   docker compose -f docker-compose.dev.yml up --build
+
+services:
+  # ── PostgreSQL ────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:15-alpine
+    container_name: ocb-dev-postgres
+    environment:
+      POSTGRES_DB: ocbenchmark
+      POSTGRES_USER: ocbuser
+      POSTGRES_PASSWORD: ocbpassword123
+    volumes:
+      - dev_postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ocbuser -d ocbenchmark"]
+      interval: 8s
+      timeout: 5s
+      retries: 10
+    networks:
+      - ocb-dev
+
+  # ── Assessment Engine (FastAPI) ───────────────────────────────────────
+  backend:
+    build:
+      context: ./backend/assessment-engine
+      dockerfile: Dockerfile
+    container_name: ocb-dev-backend
+    environment:
+      DATABASE_URL: postgresql://ocbuser:ocbpassword123@postgres:5432/ocbenchmark
+      JWT_SECRET: ocb-dev-secret-2026
+      ENV: development
+      # MongoDB / Redis / MinIO are optional in dev – skip them
+      REDIS_URL: ""
+      MONGO_URL: ""
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 8s
+      retries: 5
+    networks:
+      - ocb-dev
+    restart: unless-stopped
+
+  # ── Token Dashboard (React → nginx) ──────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend/token-dashboard
+      dockerfile: Dockerfile
+      args:
+        # Browser calls the backend directly at localhost:8000
+        REACT_APP_API_URL: http://localhost:8000
+    container_name: ocb-dev-frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    networks:
+      - ocb-dev
+    restart: unless-stopped
+
+  # ── Prometheus (optional – scrapes /metrics) ──────────────────────────
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: ocb-dev-prometheus
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - dev_prometheus_data:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=7d
+    ports:
+      - "9090:9090"
+    networks:
+      - ocb-dev
+    restart: unless-stopped
+
+volumes:
+  dev_postgres_data:
+  dev_prometheus_data:
+
+networks:
+  ocb-dev:
+    driver: bridge
