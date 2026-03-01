@@ -290,21 +290,22 @@ def _mock_tool_params(tool_name: str, prompt: str, rng) -> dict:
 
 
 def _http_agent_call(task, case: dict) -> dict:
-    """Simplified real HTTP call to agent endpoint."""
+    """Call the real agent endpoint using the appropriate protocol adapter."""
     import httpx
+    from services.protocol_adapters import get_adapter
+
+    adapter = get_adapter(getattr(task, "agent_protocol", "http") or "http")
     try:
-        headers = {"Content-Type": "application/json"}
-        if task.auth_header:
-            k, _, v = task.auth_header.partition(" ")
-            headers["Authorization"] = f"{k} {v}"
-        payload = {
-            "model": "agent",
-            "messages": [{"role": "user", "content": case["prompt"]}],
-        }
-        resp = httpx.post(task.endpoint_url, json=payload, headers=headers, timeout=15.0)
-        return {"type": "text", "content": resp.text, "status_code": resp.status_code}
+        body, headers = adapter.build_request(task, case)
+        resp = httpx.post(task.endpoint_url, json=body, headers=headers, timeout=15.0)
+        resp.raise_for_status()
+        return adapter.parse_response(resp.json())
+    except httpx.TimeoutException:
+        return {"type": "error", "content": "Agent endpoint timed out (>15s)", "tool_calls": []}
+    except httpx.HTTPStatusError as exc:
+        return {"type": "error", "content": f"HTTP {exc.response.status_code}", "tool_calls": []}
     except Exception as exc:
-        return {"type": "error", "content": str(exc), "tool_calls": []}
+        return {"type": "error", "content": str(exc)[:256], "tool_calls": []}
 
 
 def _create_report(task, dim_totals: dict, results: list, scorer, db: Session):

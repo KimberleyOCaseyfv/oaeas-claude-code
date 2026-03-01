@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 import uvicorn
 
 from database import init_db
-from routers import tokens, assessments, reports, rankings, payments, payments_simple
+from routers import tokens, assessments, reports, rankings, payments, payments_simple, auth, human_auth
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -47,6 +47,8 @@ async def global_exception_handler(request: Request, exc: Exception):
     )
 
 # 注册路由
+app.include_router(auth.router)
+app.include_router(human_auth.router)
 app.include_router(tokens.router)
 app.include_router(assessments.router)
 app.include_router(reports.router)
