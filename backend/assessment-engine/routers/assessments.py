@@ -3,7 +3,7 @@ import os
 import secrets
 import string
 import hashlib
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from fastapi import APIRouter, Depends, Request, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
@@ -24,7 +24,7 @@ def _resolve_bearer(authorization: Optional[str], db: Session):
     val = authorization.removeprefix("Bearer ").strip()
     if val.startswith("ocb_tmp_"):
         anon = db.query(AnonymousToken).filter(AnonymousToken.token_value == val).first()
-        if not anon or anon.expires_at < datetime.utcnow():
+        if not anon or anon.expires_at < datetime.now(timezone.utc):
             raise HTTPException(status_code=401, detail="OCE-1001: Invalid or expired token")
         return anon, None
     # Formal token by code
@@ -88,7 +88,7 @@ def _execute_assessment(task_id: str, db: Session):
         return
 
     task.status = "running"
-    task.started_at = datetime.utcnow()
+    task.started_at = datetime.now(timezone.utc)
     db.commit()
 
     try:
@@ -139,7 +139,7 @@ def _execute_assessment(task_id: str, db: Session):
                     task.veto_reason = f"Compliance violation on case {case['case_id']}"
                     task.status = "aborted"
                     task.total_score = 0
-                    task.completed_at = datetime.utcnow()
+                    task.completed_at = datetime.now(timezone.utc)
                     task.duration_seconds = int((task.completed_at - task.started_at).total_seconds())
                     db.commit()
                     from metrics import record_task_aborted
@@ -204,7 +204,7 @@ def _execute_assessment(task_id: str, db: Session):
         task.total_score       = sum(v["score"] for v in dim_totals.values())
         task.level             = _calculate_level(float(task.total_score))
         task.status            = "completed"
-        task.completed_at      = datetime.utcnow()
+        task.completed_at      = datetime.now(timezone.utc)
         task.duration_seconds  = int((task.completed_at - task.started_at).total_seconds())
         db.commit()
 
@@ -487,7 +487,7 @@ def _update_ranking(task, db: Session):
             ranking.total_score = task.total_score
             ranking.level = task.level
         ranking.task_count += 1
-        ranking.updated_at = datetime.utcnow()
+        ranking.updated_at = datetime.now(timezone.utc)
     else:
         ranking = Ranking(
             agent_id=task.agent_id,
@@ -579,8 +579,8 @@ def start_task(
         data={
             "task_id": str(task.id),
             "status": "running",
-            "started_at": datetime.utcnow().isoformat(),
-            "deadline": (datetime.utcnow().__class__.utcnow() if False else datetime.utcnow()).isoformat(),
+            "started_at": datetime.now(timezone.utc).isoformat(),
+            "deadline": datetime.now(timezone.utc).isoformat(),
             "message": "Assessment started. Poll /status or await webhook.",
         },
     )
@@ -604,7 +604,7 @@ def get_task_status(task_id: str, db: Session = Depends(get_db)):
                 "cases_completed": task.cases_completed,
                 "cases_total": task.cases_total,
                 "elapsed_seconds": (
-                    int((datetime.utcnow() - task.started_at).total_seconds())
+                    int((datetime.now(timezone.utc) - task.started_at).total_seconds())
                     if task.started_at else 0
                 ),
             },

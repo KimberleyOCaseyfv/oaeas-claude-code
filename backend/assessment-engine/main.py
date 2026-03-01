@@ -5,7 +5,8 @@ from contextlib import asynccontextmanager
 import uvicorn
 
 from database import init_db
-from routers import tokens, assessments, reports, rankings, payments, payments_simple, auth, human_auth
+from routers import tokens, assessments, reports, rankings, auth, human_auth
+# payments disabled in free mode
 from metrics import setup_metrics
 
 @asynccontextmanager
@@ -52,8 +53,6 @@ app.include_router(tokens.router)
 app.include_router(assessments.router)
 app.include_router(reports.router)
 app.include_router(rankings.router)
-app.include_router(payments.router)
-app.include_router(payments_simple.router)
 
 # Prometheus instrumentation (exposes /metrics)
 setup_metrics(app)

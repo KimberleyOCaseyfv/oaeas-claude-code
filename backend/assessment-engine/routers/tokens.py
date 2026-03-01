@@ -10,10 +10,25 @@ from services.assessment_service import TokenService, AssessmentService
 
 router = APIRouter(prefix="/tokens", tags=["Tokens"])
 
+
+def _token_dict(token) -> dict:
+    """Serialize a Token ORM object to a plain dict (UUID → str)."""
+    return {
+        "id":         str(token.id),
+        "token_code": token.token_code,
+        "name":       token.name,
+        "status":     token.status,
+        "agent_type": token.agent_type,
+        "used_count": token.used_count,
+        "max_uses":   token.max_uses,
+        "created_at": token.created_at.isoformat() if token.created_at else None,
+        "expires_at": token.expires_at.isoformat() if token.expires_at else None,
+    }
+
 @router.post("", response_model=APIResponse)
 def create_token(
     data: TokenCreate,
-    user_id: str = "user_001",  # TODO: 从JWT获取
+    user_id: str = "00000000-0000-0000-0000-000000000001",  # dev default user
     db: Session = Depends(get_db)
 ):
     """创建新的测评Token"""
@@ -21,24 +36,20 @@ def create_token(
         token = TokenService.create_token(db, user_id, data)
         from metrics import record_token_created
         record_token_created()
-        return APIResponse(
-            data=TokenResponse.from_orm(token)
-        )
+        return APIResponse(data=_token_dict(token))
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.get("", response_model=APIResponse)
 def list_tokens(
-    user_id: str = "user_001",
+    user_id: str = "00000000-0000-0000-0000-000000000001",  # dev default
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db)
 ):
     """列出用户的所有Token"""
     tokens = TokenService.list_tokens(db, user_id, skip, limit)
-    return APIResponse(
-        data=[TokenResponse.from_orm(t) for t in tokens]
-    )
+    return APIResponse(data=[_token_dict(t) for t in tokens])
 
 @router.get("/{token_code}", response_model=APIResponse)
 def get_token(token_code: str, db: Session = Depends(get_db)):
@@ -46,7 +57,7 @@ def get_token(token_code: str, db: Session = Depends(get_db)):
     token = TokenService.get_token_by_code(db, token_code)
     if not token:
         raise HTTPException(status_code=404, detail="Token不存在")
-    return APIResponse(data=TokenResponse.from_orm(token))
+    return APIResponse(data=_token_dict(token))
 
 @router.post("/{token_code}/validate", response_model=APIResponse)
 def validate_token(token_code: str, db: Session = Depends(get_db)):

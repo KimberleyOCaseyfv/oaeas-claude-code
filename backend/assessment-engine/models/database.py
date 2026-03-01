@@ -35,7 +35,7 @@ class Token(Base):
     status      = Column(String(50), default="active")
     max_uses    = Column(Integer, default=100)
     used_count  = Column(Integer, default=0)
-    created_by  = Column(UUID(as_uuid=True), ForeignKey("users.id"))
+    created_by  = Column(UUID(as_uuid=True), nullable=True)  # no FK in free mode
     created_at  = Column(DateTime(timezone=True), default=datetime.utcnow)
     expires_at  = Column(DateTime(timezone=True))
 

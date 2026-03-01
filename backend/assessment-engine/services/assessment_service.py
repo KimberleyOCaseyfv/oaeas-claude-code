@@ -1,6 +1,6 @@
 import random
 import string
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
 from models.database import Token, AssessmentTask, TestCase, TestResult, Report, Ranking
@@ -33,7 +33,7 @@ class TokenService:
         )
         
         if data.expires_days:
-            token.expires_at = datetime.utcnow() + timedelta(days=data.expires_days)
+            token.expires_at = datetime.now(timezone.utc) + timedelta(days=data.expires_days)
         
         db.add(token)
         db.commit()
@@ -64,7 +64,7 @@ class TokenService:
         if token.used_count >= token.max_uses:
             return False, "Token使用次数已达上限"
         
-        if token.expires_at and token.expires_at < datetime.utcnow():
+        if token.expires_at and token.expires_at < datetime.now(timezone.utc):
             return False, "Token已过期"
         
         return True, None
@@ -145,7 +145,7 @@ class AssessmentService:
         
         # 更新状态为运行中
         task.status = TaskStatus.RUNNING.value
-        task.started_at = datetime.utcnow()
+        task.started_at = datetime.now(timezone.utc)
         db.commit()
         
         try:
@@ -163,7 +163,7 @@ class AssessmentService:
             task.total_score = task.tool_score + task.reasoning_score + task.interaction_score + task.stability_score
             task.level = cls.calculate_level(task.total_score)
             task.status = TaskStatus.COMPLETED.value
-            task.completed_at = datetime.utcnow()
+            task.completed_at = datetime.now(timezone.utc)
             
             # 计算持续时间
             if task.started_at:
@@ -248,7 +248,7 @@ class AssessmentService:
             test_cases=[],  # TODO: 填充实际测试用例
             recommendations=recommendations,
             is_deep_report=1,  # 免费模式：所有报告都是深度报告
-            unlocked_at=datetime.utcnow()  # 免费模式：立即解锁
+            unlocked_at=datetime.now(timezone.utc)  # 免费模式：立即解锁
         )
         
         db.add(report)
@@ -314,7 +314,7 @@ class AssessmentService:
                 ranking.total_score = task.total_score
                 ranking.level = task.level
             ranking.task_count += 1
-            ranking.updated_at = datetime.utcnow()
+            ranking.updated_at = datetime.now(timezone.utc)
         else:
             # 创建新记录
             ranking = Ranking(
@@ -356,7 +356,7 @@ class ReportService:
             raise ValueError("报告不存在")
         
         report.is_deep_report = 1
-        report.unlocked_at = datetime.utcnow()
+        report.unlocked_at = datetime.now(timezone.utc)
         db.commit()
         db.refresh(report)
         return report

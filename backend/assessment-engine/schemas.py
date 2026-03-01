@@ -14,6 +14,13 @@ class Protocol(str, Enum):
     HTTP      = "http"
     MOCK      = "mock"   # test env: built-in mock agent
 
+class AgentType(str, Enum):
+    GENERAL   = "general"
+    OPENAI    = "openai"
+    ANTHROPIC = "anthropic"
+    OPENCLAW  = "openclaw"
+    CUSTOM    = "custom"
+
 class TaskStatus(str, Enum):
     PENDING   = "pending"
     RUNNING   = "running"
@@ -59,7 +66,7 @@ class AnonymousTokenResponse(BaseModel):
 class TokenCreate(BaseModel):
     name:         str
     description:  Optional[str] = None
-    agent_type:   str = "general"
+    agent_type:   AgentType = AgentType.GENERAL
     max_uses:     int = 100
     expires_days: Optional[int] = None
 
@@ -195,8 +202,24 @@ class ErrorDetail(BaseModel):
     details: Dict[str, Any] = {}
 
 class APIResponse(BaseModel):
-    success:    bool
+    success:    bool = True
+    message:    Optional[str] = None
     data:       Optional[Any] = None
     error:      Optional[ErrorDetail] = None
     request_id: Optional[str] = None
     timestamp:  datetime = Field(default_factory=datetime.utcnow)
+
+
+# ── Assessment creation (used by /tokens/{code}/assessments) ──────────────────
+
+class AssessmentCreate(BaseModel):
+    """Request body for creating an assessment via a token."""
+    token_code:   Optional[str] = None   # injected from URL path by the endpoint
+    agent_id:     str = Field(..., min_length=1, max_length=128)
+    agent_name:   str = Field(..., min_length=1, max_length=255)
+    endpoint_url: Optional[str] = None   # real agent HTTP endpoint (None → mock)
+    webhook_url:  Optional[str] = None
+
+# Alias for backwards-compat imports
+AssessmentResponse = TaskResponse
+AssessmentStatus   = TaskStatusResponse
