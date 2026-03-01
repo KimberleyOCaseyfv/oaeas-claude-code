@@ -37,7 +37,8 @@ function ChannelBadge({ channel }) {
       </span>
     );
   return (
-    <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-lg bg-slate-700 text-slate-400 border border-slate-600">
+    <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs rounded-lg"
+          style={{ background: '#161b22', color: '#475569', border: '1px solid #1e293b' }}>
       {channel}
     </span>
   );
@@ -47,25 +48,29 @@ function ChannelBadge({ channel }) {
 function ConfirmDialog({ order, onConfirm, onClose, loading }) {
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm p-4">
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-sm shadow-2xl">
-        <div className="flex items-center justify-between p-5 border-b border-slate-800">
+      <div className="rounded-2xl w-full max-w-sm shadow-2xl"
+           style={{ background: '#0d1117', border: '1px solid #1e293b' }}>
+        <div className="flex items-center justify-between p-5" style={{ borderBottom: '1px solid #1e293b' }}>
           <h3 className="font-semibold text-white">确认收款</h3>
-          <button onClick={onClose} className="text-slate-500 hover:text-white p-1 rounded-lg hover:bg-slate-800">
+          <button onClick={onClose} className="p-1 rounded-lg transition-colors"
+                  style={{ color: '#475569' }}
+                  onMouseEnter={e => { e.currentTarget.style.color = '#fff'; e.currentTarget.style.background = '#161b22'; }}
+                  onMouseLeave={e => { e.currentTarget.style.color = '#475569'; e.currentTarget.style.background = 'transparent'; }}>
             <X className="w-4 h-4" />
           </button>
         </div>
         <div className="p-5 space-y-4">
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">
-              <span className="text-slate-500">订单号</span>
+              <span style={{ color: '#475569' }}>订单号</span>
               <code className="text-blue-400 text-xs">{order.order_code}</code>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-500">支付渠道</span>
+              <span style={{ color: '#475569' }}>支付渠道</span>
               <ChannelBadge channel={order.channel} />
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-500">金额</span>
+              <span style={{ color: '#475569' }}>金额</span>
               <span className="text-green-400 font-bold">¥{order.amount?.toFixed(2)}</span>
             </div>
           </div>
@@ -100,7 +105,7 @@ function AdminLogin({ onLogin }) {
         </div>
         <div>
           <h1 className="text-xl font-bold text-white mb-1">管理后台</h1>
-          <p className="text-sm text-slate-500">支付订单管理</p>
+          <p className="text-sm" style={{ color: '#475569' }}>支付订单管理</p>
         </div>
         <div className="space-y-3 text-left">
           <label className="form-label">管理员密钥</label>
@@ -142,7 +147,7 @@ function StatsRow({ orders }) {
       ].map(s => (
         <div key={s.label} className="card p-4 text-center">
           <div className={`text-2xl font-bold ${s.color}`}>{s.value}</div>
-          <div className="text-xs text-slate-500 mt-1">{s.label}</div>
+          <div className="text-xs mt-1" style={{ color: '#475569' }}>{s.label}</div>
         </div>
       ))}
     </div>
@@ -241,7 +246,7 @@ export default function AdminPayments() {
           <h1 className="text-xl font-bold text-white flex items-center gap-2">
             <CreditCard className="w-5 h-5 text-blue-400" /> 支付订单管理
           </h1>
-          <p className="text-sm text-slate-500 mt-0.5">人工收款确认后台</p>
+          <p className="text-sm mt-0.5" style={{ color: '#475569' }}>人工收款确认后台</p>
         </div>
         <div className="flex items-center gap-3">
           <button onClick={fetchOrders} disabled={loading} className="btn-secondary py-2">
@@ -259,7 +264,7 @@ export default function AdminPayments() {
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: '#475569' }} />
           <input
             type="text"
             className="form-input pl-9"
@@ -273,11 +278,12 @@ export default function AdminPayments() {
             <button
               key={s}
               onClick={() => setStatusFilter(s)}
-              className={`px-3 py-2 rounded-xl text-sm font-medium transition-all ${
+              className="px-3 py-2 rounded-xl text-sm font-medium transition-all"
+              style={
                 statusFilter === s
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-slate-800 text-slate-400 hover:text-white border border-slate-700'
-              }`}
+                  ? { background: '#2563eb', color: '#fff' }
+                  : { background: '#161b22', color: '#475569', border: '1px solid #1e293b' }
+              }
             >
               {s === 'all' ? '全部' : s === 'pending' ? '待确认' : '已支付'}
             </button>
@@ -286,31 +292,31 @@ export default function AdminPayments() {
       </div>
 
       {/* Table */}
-      <div className="card overflow-hidden">
+      <div className="rounded-xl overflow-hidden" style={{ border: '1px solid #1e293b' }}>
         {loading ? (
-          <div className="p-12 text-center">
+          <div className="p-12 text-center" style={{ background: '#0d1117' }}>
             <div className="w-8 h-8 spinner mx-auto mb-3" />
-            <p className="text-slate-500 text-sm">加载中…</p>
+            <p className="text-sm" style={{ color: '#475569' }}>加载中…</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto" style={{ background: '#0d1117' }}>
             <table className="w-full">
               <thead>
-                <tr className="border-b border-slate-800">
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">订单号</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">渠道</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">金额</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">状态</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">创建时间</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">支付时间</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">操作</th>
+                <tr style={{ borderBottom: '1px solid #1e293b' }}>
+                  {['订单号', '渠道', '金额', '状态', '创建时间', '支付时间', '操作'].map((h, i) => (
+                    <th key={h}
+                        className={`px-6 py-3 text-xs font-medium uppercase tracking-wider ${i === 2 || i === 6 ? 'text-right' : 'text-left'}`}
+                        style={{ color: '#475569' }}>{h}</th>
+                  ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/60">
+              <tbody>
                 {filtered.map(order => (
-                  <tr key={order.order_code} className="hover:bg-slate-800/30 transition-colors">
+                  <tr key={order.order_code} style={{ borderBottom: '1px solid #0f172a' }}
+                      onMouseEnter={e => e.currentTarget.style.background = '#161b22'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                     <td className="px-6 py-4">
-                      <code className="text-xs text-slate-300 font-mono">{order.order_code}</code>
+                      <code className="text-xs font-mono" style={{ color: '#cbd5e1' }}>{order.order_code}</code>
                     </td>
                     <td className="px-6 py-4">
                       <ChannelBadge channel={order.channel} />
@@ -321,22 +327,25 @@ export default function AdminPayments() {
                     <td className="px-6 py-4">
                       <StatusBadge status={order.status} />
                     </td>
-                    <td className="px-6 py-4 text-xs text-slate-500">
+                    <td className="px-6 py-4 text-xs" style={{ color: '#475569' }}>
                       {new Date(order.created_at).toLocaleString('zh-CN')}
                     </td>
-                    <td className="px-6 py-4 text-xs text-slate-500">
+                    <td className="px-6 py-4 text-xs" style={{ color: '#475569' }}>
                       {order.paid_at ? new Date(order.paid_at).toLocaleString('zh-CN') : '—'}
                     </td>
                     <td className="px-6 py-4 text-right">
                       {order.status === 'pending' ? (
                         <button
                           onClick={() => setConfirmTarget(order)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-500 text-white text-xs rounded-lg transition-colors font-medium"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-white text-xs rounded-lg transition-colors font-medium"
+                          style={{ background: '#16a34a' }}
+                          onMouseEnter={e => e.currentTarget.style.background = '#15803d'}
+                          onMouseLeave={e => e.currentTarget.style.background = '#16a34a'}
                         >
                           <CheckCircle className="w-3.5 h-3.5" /> 确认收款
                         </button>
                       ) : (
-                        <span className="text-xs text-slate-600">—</span>
+                        <span className="text-xs" style={{ color: '#1e293b' }}>—</span>
                       )}
                     </td>
                   </tr>
@@ -344,8 +353,8 @@ export default function AdminPayments() {
                 {filtered.length === 0 && (
                   <tr>
                     <td colSpan="7" className="px-6 py-12 text-center">
-                      <CreditCard className="w-10 h-10 text-slate-700 mx-auto mb-3" />
-                      <p className="text-slate-500 text-sm">暂无订单记录</p>
+                      <CreditCard className="w-10 h-10 mx-auto mb-3" style={{ color: '#1e293b' }} />
+                      <p className="text-sm" style={{ color: '#475569' }}>暂无订单记录</p>
                     </td>
                   </tr>
                 )}
@@ -354,16 +363,16 @@ export default function AdminPayments() {
           </div>
         )}
         {filtered.length > 0 && (
-          <div className="px-6 py-3 border-t border-slate-800 text-xs text-slate-500">
+          <div className="px-6 py-3 text-xs" style={{ borderTop: '1px solid #1e293b', background: '#0d1117', color: '#475569' }}>
             共 {filtered.length} 条{filtered.length !== orders.length ? `（已筛选，总计 ${orders.length}）` : ''}
           </div>
         )}
       </div>
 
       {/* Guide */}
-      <div className="card p-5">
+      <div className="rounded-xl p-5" style={{ background: '#0d1117', border: '1px solid #1e293b' }}>
         <h3 className="font-semibold text-white mb-3 text-sm">操作指南</h3>
-        <ol className="text-xs text-slate-500 space-y-2 list-decimal list-inside">
+        <ol className="text-xs space-y-2 list-decimal list-inside" style={{ color: '#475569' }}>
           <li>用户完成测评后，选择微信/支付宝扫码支付 ¥9.90</li>
           <li>用户支付成功后，订单状态变为「待确认」</li>
           <li>在微信/支付宝收款账单中核对订单号和金额</li>

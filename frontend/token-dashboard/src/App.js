@@ -1,90 +1,185 @@
-import React, { useState } from 'react';
-import { BrowserRouter as Router, Routes, Route, NavLink } from 'react-router-dom';
+import React, { useState, createContext, useContext } from 'react';
+import { BrowserRouter as Router, Routes, Route, NavLink, Link, Navigate, useLocation } from 'react-router-dom';
+import { Toaster } from 'react-hot-toast';
 import {
-  Zap, BarChart3, Trophy, FileText, PlusCircle, CreditCard, Menu, X, ChevronRight
+  Zap, LayoutDashboard, Bot, ClipboardList, Trophy,
+  LogOut, Menu, X, ChevronRight, Settings
 } from 'lucide-react';
-import Dashboard from './pages/Dashboard';
-import TokenList from './pages/TokenList';
-import CreateAssessment from './pages/CreateAssessment';
-import ReportView from './pages/ReportView';
+
+// Pages – Public
+import Home     from './pages/Home';
 import Rankings from './pages/Rankings';
+import ReportView from './pages/ReportView';
+// Pages – Console (Human)
+import Login       from './pages/Login';
+import Dashboard   from './pages/Dashboard';
+import Bots        from './pages/Bots';
+import Assessments from './pages/Assessments';
+// Pages – Admin
 import AdminPayments from './pages/AdminPayments';
 
-const navItems = [
-  { to: '/', icon: BarChart3, label: '数据概览', end: true },
-  { to: '/tokens', icon: FileText, label: '测评 Tokens' },
-  { to: '/assess', icon: PlusCircle, label: '新建测评' },
-  { to: '/rankings', icon: Trophy, label: '全球排行榜' },
-  { to: '/admin/payments', icon: CreditCard, label: '支付管理' },
+/* ─── Auth context (localStorage-based for simplicity) ────── */
+const AuthCtx = createContext(null);
+export function useAuth() { return useContext(AuthCtx); }
+
+function AuthProvider({ children }) {
+  const [jwt, setJwt] = useState(() => localStorage.getItem('human_jwt'));
+  const [user, setUser] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('human_user')); } catch { return null; }
+  });
+
+  function login(token, userObj) {
+    localStorage.setItem('human_jwt', token);
+    localStorage.setItem('human_user', JSON.stringify(userObj));
+    setJwt(token);
+    setUser(userObj);
+  }
+
+  function logout() {
+    localStorage.removeItem('human_jwt');
+    localStorage.removeItem('human_user');
+    setJwt(null);
+    setUser(null);
+  }
+
+  return (
+    <AuthCtx.Provider value={{ jwt, user, login, logout, isAuth: !!jwt }}>
+      {children}
+    </AuthCtx.Provider>
+  );
+}
+
+/* ─── Guard ────────────────────────────────────────────────── */
+function RequireAuth({ children }) {
+  const { isAuth } = useAuth();
+  const location = useLocation();
+  if (!isAuth) return <Navigate to="/console/login" state={{ from: location }} replace />;
+  return children;
+}
+
+/* ─── Public top-nav ─────────────────────────────────────── */
+function PublicNav() {
+  const { isAuth } = useAuth();
+  return (
+    <nav className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 py-3"
+         style={{ background: 'rgba(5,8,16,0.8)', backdropFilter: 'blur(12px)', borderBottom: '1px solid #1e293b' }}>
+      <Link to="/" className="flex items-center gap-2">
+        <div className="w-7 h-7 rounded-lg flex items-center justify-center"
+             style={{ background: 'linear-gradient(135deg,#2563eb,#7c3aed)' }}>
+          <Zap className="w-4 h-4 text-white" />
+        </div>
+        <span className="font-bold tracking-wide text-white">OAEAS</span>
+      </Link>
+      <div className="flex items-center gap-2">
+        <Link to="/rankings" className="btn-ghost text-sm py-1.5 px-3">
+          <Trophy className="w-4 h-4" /> 排行榜
+        </Link>
+        {isAuth ? (
+          <Link to="/console/dashboard" className="btn-primary text-sm py-1.5 px-4">
+            进入控制台
+          </Link>
+        ) : (
+          <Link to="/console/login" className="btn-primary text-sm py-1.5 px-4">
+            登录控制台
+          </Link>
+        )}
+      </div>
+    </nav>
+  );
+}
+
+/* ─── Console sidebar layout ─────────────────────────────── */
+const CONSOLE_NAV = [
+  { to: '/console/dashboard',   icon: LayoutDashboard, label: '概览' },
+  { to: '/console/bots',        icon: Bot,              label: 'Bot 管理' },
+  { to: '/console/assessments', icon: ClipboardList,    label: '测评记录' },
 ];
 
-function Sidebar({ open, onClose }) {
+function ConsoleSidebar({ open, onClose }) {
+  const { user, logout } = useAuth();
   return (
     <>
-      {/* Overlay */}
       {open && (
-        <div
-          className="fixed inset-0 bg-black/60 z-40 lg:hidden backdrop-blur-sm"
-          onClick={onClose}
-        />
+        <div className="fixed inset-0 bg-black/60 z-40 lg:hidden backdrop-blur-sm" onClick={onClose} />
       )}
+      <aside className={`
+        fixed inset-y-0 left-0 z-50 w-60 flex flex-col
+        transform transition-transform duration-300
+        lg:relative lg:translate-x-0
+        ${open ? 'translate-x-0' : '-translate-x-full'}
+      `} style={{ background: 'var(--color-bg-surface)', borderRight: '1px solid var(--color-border)' }}>
 
-      <aside
-        className={`
-          fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 border-r border-slate-800
-          flex flex-col transform transition-transform duration-300
-          lg:relative lg:translate-x-0 lg:flex
-          ${open ? 'translate-x-0' : '-translate-x-full'}
-        `}
-      >
         {/* Logo */}
-        <div className="p-6 border-b border-slate-800">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20">
-              <Zap className="w-6 h-6 text-white" />
+        <div className="p-5 border-b" style={{ borderColor: 'var(--color-border)' }}>
+          <Link to="/" className="flex items-center gap-2.5" onClick={onClose}>
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center"
+                 style={{ background: 'linear-gradient(135deg,#2563eb,#7c3aed)' }}>
+              <Zap className="w-4 h-4 text-white" />
             </div>
             <div>
-              <div className="font-bold text-lg tracking-wide">OAEAS</div>
-              <div className="text-xs text-slate-500">Agent 能力评测平台</div>
+              <div className="font-bold text-sm text-white">OAEAS 控制台</div>
+              <div className="text-xs" style={{ color: 'var(--color-text-muted)' }}>Agent 评测平台</div>
             </div>
-          </div>
+          </Link>
         </div>
 
-        {/* Navigation */}
-        <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-          {navItems.map(({ to, icon: Icon, label, end }) => (
+        {/* Nav */}
+        <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
+          {CONSOLE_NAV.map(({ to, icon: Icon, label }) => (
             <NavLink
               key={to}
               to={to}
-              end={end}
               onClick={onClose}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 text-sm font-medium group ${
+                `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all group ${
                   isActive
-                    ? 'bg-blue-500/15 text-blue-400 border border-blue-500/25'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                    ? 'text-white'
+                    : 'hover:text-white'
                 }`
+              }
+              style={({ isActive }) => isActive
+                ? { background: 'rgba(37,99,235,0.12)', color: '#60a5fa', border: '1px solid rgba(37,99,235,0.2)' }
+                : { color: 'var(--color-text-muted)', border: '1px solid transparent' }
               }
             >
               {({ isActive }) => (
                 <>
-                  <Icon className={`w-5 h-5 shrink-0 ${isActive ? 'text-blue-400' : 'text-slate-500 group-hover:text-slate-300'}`} />
+                  <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-blue-400' : 'text-slate-500 group-hover:text-slate-300'}`} />
                   <span className="flex-1">{label}</span>
-                  {isActive && <ChevronRight className="w-4 h-4 ml-auto" />}
+                  {isActive && <ChevronRight className="w-3 h-3 text-blue-400" />}
                 </>
               )}
             </NavLink>
           ))}
+
+          <div className="pt-3 border-t mt-3" style={{ borderColor: 'var(--color-border)' }}>
+            <Link to="/rankings"
+              className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all"
+              style={{ color: 'var(--color-text-muted)' }}
+              onMouseEnter={e => e.currentTarget.style.color = '#f8fafc'}
+              onMouseLeave={e => e.currentTarget.style.color = 'var(--color-text-muted)'}
+              onClick={onClose}
+            >
+              <Trophy className="w-4 h-4 shrink-0" /> 排行榜
+            </Link>
+          </div>
         </nav>
 
-        {/* Footer */}
-        <div className="p-4 border-t border-slate-800">
-          <div className="px-4 py-3 bg-slate-800/60 rounded-xl">
-            <div className="text-xs text-slate-500 leading-relaxed">
-              <span className="text-slate-400 font-medium">OpenClaw Agent Benchmark</span>
-              <br />
-              版本 v1.0.0 · 2026
+        {/* User footer */}
+        <div className="p-3 border-t" style={{ borderColor: 'var(--color-border)' }}>
+          <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg"
+               style={{ background: 'var(--color-bg-elevated)' }}>
+            <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold"
+                 style={{ background: 'rgba(37,99,235,0.2)', color: '#60a5fa' }}>
+              {user?.email?.[0]?.toUpperCase() || 'U'}
             </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-xs font-medium text-white truncate">{user?.email || '已登录'}</div>
+            </div>
+            <button onClick={logout} className="btn-ghost p-1.5 rounded-lg text-red-400 hover:text-red-300"
+                    title="退出登录">
+              <LogOut className="w-4 h-4" />
+            </button>
           </div>
         </div>
       </aside>
@@ -92,45 +187,104 @@ function Sidebar({ open, onClose }) {
   );
 }
 
-function App() {
+function ConsoleLayout({ children }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-
   return (
-    <Router>
-      <div className="min-h-screen bg-slate-950 text-slate-100 flex">
-        <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-
-        {/* Main Content */}
-        <div className="flex-1 flex flex-col min-w-0">
-          {/* Mobile Header */}
-          <header className="lg:hidden flex items-center justify-between px-4 py-3 bg-slate-900/80 backdrop-blur border-b border-slate-800 sticky top-0 z-30">
-            <button
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg"
-            >
-              {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-            </button>
-            <div className="flex items-center gap-2">
-              <Zap className="w-5 h-5 text-blue-400" />
-              <span className="font-bold">OAEAS</span>
-            </div>
-            <div className="w-9" />
-          </header>
-
-          <main className="flex-1 p-4 sm:p-6 overflow-auto">
-            <Routes>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/tokens" element={<TokenList />} />
-              <Route path="/assess" element={<CreateAssessment />} />
-              <Route path="/reports/:reportCode" element={<ReportView />} />
-              <Route path="/rankings" element={<Rankings />} />
-              <Route path="/admin/payments" element={<AdminPayments />} />
-            </Routes>
-          </main>
-        </div>
+    <div className="min-h-screen flex" style={{ background: 'var(--color-bg-void)' }}>
+      <ConsoleSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Mobile header */}
+        <header className="lg:hidden flex items-center justify-between px-4 py-3 sticky top-0 z-30"
+                style={{ background: 'rgba(13,17,23,0.9)', backdropFilter: 'blur(8px)', borderBottom: '1px solid var(--color-border)' }}>
+          <button onClick={() => setSidebarOpen(!sidebarOpen)} className="text-slate-400 hover:text-white p-1.5 rounded-lg">
+            {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          </button>
+          <div className="flex items-center gap-2">
+            <Zap className="w-4 h-4 text-blue-400" />
+            <span className="font-bold text-white text-sm">OAEAS 控制台</span>
+          </div>
+          <div className="w-8" />
+        </header>
+        <main className="flex-1 p-4 sm:p-6 overflow-auto">
+          {children}
+        </main>
       </div>
-    </Router>
+    </div>
   );
 }
 
-export default App;
+/* ─── App ────────────────────────────────────────────────── */
+export default function App() {
+  return (
+    <AuthProvider>
+      <Router>
+        <Toaster
+          position="bottom-right"
+          toastOptions={{
+            style: {
+              background: 'var(--color-bg-elevated)',
+              color: '#f8fafc',
+              border: '1px solid var(--color-border)',
+              borderRadius: '12px',
+              fontSize: '13px',
+            }
+          }}
+        />
+        <Routes>
+          {/* ── Public ─────────────────────────────────── */}
+          <Route path="/" element={
+            <div style={{ background: 'var(--color-bg-void)' }}>
+              <PublicNav />
+              <Home />
+            </div>
+          } />
+          <Route path="/rankings" element={
+            <div style={{ background: 'var(--color-bg-void)', minHeight: '100vh' }}>
+              <PublicNav />
+              <div className="pt-16 px-4 sm:px-6 lg:px-8 max-w-6xl mx-auto py-10">
+                <Rankings />
+              </div>
+            </div>
+          } />
+          <Route path="/reports/:reportCode" element={
+            <div style={{ background: 'var(--color-bg-void)', minHeight: '100vh' }}>
+              <PublicNav />
+              <div className="pt-16 px-4 sm:px-6 lg:px-8 max-w-4xl mx-auto py-10">
+                <ReportView />
+              </div>
+            </div>
+          } />
+
+          {/* ── Login ──────────────────────────────────── */}
+          <Route path="/console/login" element={<Login />} />
+
+          {/* ── Console (auth required) ─────────────────── */}
+          <Route path="/console" element={<Navigate to="/console/dashboard" replace />} />
+          <Route path="/console/dashboard" element={
+            <RequireAuth>
+              <ConsoleLayout><Dashboard /></ConsoleLayout>
+            </RequireAuth>
+          } />
+          <Route path="/console/bots" element={
+            <RequireAuth>
+              <ConsoleLayout><Bots /></ConsoleLayout>
+            </RequireAuth>
+          } />
+          <Route path="/console/assessments" element={
+            <RequireAuth>
+              <ConsoleLayout><Assessments /></ConsoleLayout>
+            </RequireAuth>
+          } />
+
+          {/* ── Admin ──────────────────────────────────── */}
+          <Route path="/admin/payments" element={
+            <ConsoleLayout><AdminPayments /></ConsoleLayout>
+          } />
+
+          {/* ── Fallback ───────────────────────────────── */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Router>
+    </AuthProvider>
+  );
+}

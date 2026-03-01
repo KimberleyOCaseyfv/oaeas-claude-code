@@ -30,20 +30,24 @@ function Podium({ agents }) {
   const card = (agent, pos) => {
     if (!agent) return <div className="flex-1" />;
     const styles = {
-      1: { ring: 'ring-yellow-400/40', bg: 'from-yellow-500/15 to-yellow-500/5', icon: <Crown className="w-6 h-6 text-yellow-400" />, h: 'h-32', medal: 'bg-yellow-400 text-slate-900' },
-      2: { ring: 'ring-slate-400/30', bg: 'from-slate-500/15 to-slate-500/5', icon: <Medal className="w-5 h-5 text-slate-300" />, h: 'h-24', medal: 'bg-slate-300 text-slate-900' },
-      3: { ring: 'ring-amber-600/30', bg: 'from-amber-600/15 to-amber-600/5', icon: <Award className="w-5 h-5 text-amber-500" />, h: 'h-20', medal: 'bg-amber-600 text-white' },
+      1: { ringColor: 'rgba(245,158,11,0.4)', bg: 'rgba(245,158,11,0.1)',  icon: <Crown className="w-6 h-6" style={{ color: '#f59e0b' }} />, h: 128, medalBg: '#f59e0b', medalText: '#1a1a1a' },
+      2: { ringColor: 'rgba(148,163,184,0.3)', bg: 'rgba(148,163,184,0.08)', icon: <Medal className="w-5 h-5" style={{ color: '#94a3b8' }} />, h: 96, medalBg: '#94a3b8', medalText: '#1a1a1a' },
+      3: { ringColor: 'rgba(180,120,60,0.3)',  bg: 'rgba(180,120,60,0.08)',  icon: <Award className="w-5 h-5" style={{ color: '#b47c3c' }} />, h: 80,  medalBg: '#b47c3c', medalText: '#fff' },
     }[pos];
 
     return (
-      <div className={`flex-1 flex flex-col items-center gap-2`}>
-        <div className={`w-12 h-12 ${styles.medal} rounded-full flex items-center justify-center font-bold text-lg shadow-lg`}>
+      <div className="flex-1 flex flex-col items-center gap-2">
+        <div className="w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg shadow-lg"
+             style={{ background: styles.medalBg, color: styles.medalText }}>
           {pos}
         </div>
-        <div className={`w-full card bg-gradient-to-b ${styles.bg} ring-1 ${styles.ring} p-3 text-center ${styles.h} flex flex-col justify-center`}>
+        <div className="w-full rounded-xl p-3 text-center flex flex-col justify-center"
+             style={{ background: styles.bg, border: `1px solid ${styles.ringColor}`, minHeight: styles.h }}>
           <div className="flex items-center justify-center gap-1 mb-1">{styles.icon}</div>
           <div className="font-bold text-white text-sm truncate px-1">{agent.agent_name}</div>
-          <div className="text-2xl font-black text-white mt-1">{Number(agent.total_score).toFixed(0)}</div>
+          <div className="text-2xl font-black text-white mt-1 font-mono">
+            {Number(agent.total_score).toFixed(0)}
+          </div>
           <span className={`${getLevelClass(agent.level)} mt-1`}>{agent.level}</span>
         </div>
       </div>
@@ -61,22 +65,24 @@ function Podium({ agents }) {
 
 /* ─── Rank icon ────────────────────────────────────────────── */
 function RankIcon({ rank }) {
-  if (rank === 1) return <Trophy className="w-5 h-5 text-yellow-400" />;
-  if (rank === 2) return <Medal className="w-5 h-5 text-slate-300" />;
-  if (rank === 3) return <Award className="w-5 h-5 text-amber-500" />;
-  return <span className="w-5 text-center text-sm font-bold text-slate-500">{rank}</span>;
+  if (rank === 1) return <Trophy className="w-5 h-5" style={{ color: '#f59e0b' }} />;
+  if (rank === 2) return <Medal className="w-5 h-5" style={{ color: '#94a3b8' }} />;
+  if (rank === 3) return <Award className="w-5 h-5" style={{ color: '#b47c3c' }} />;
+  return <span className="w-5 text-center text-sm font-bold" style={{ color: '#475569' }}>{rank}</span>;
 }
 
 /* ─── Score segment bar ────────────────────────────────────── */
 function ScoreSegment({ score, max = 1000 }) {
   const pct = Math.min((score / max) * 100, 100);
-  const color = pct >= 85 ? '#eab308' : pct >= 70 ? '#a855f7' : pct >= 50 ? '#3b82f6' : '#64748b';
+  const color = pct >= 85 ? '#f59e0b' : pct >= 70 ? '#7c3aed' : pct >= 50 ? '#2563eb' : '#64748b';
   return (
     <div className="flex items-center gap-2 min-w-[120px]">
-      <div className="flex-1 h-1.5 bg-slate-800 rounded-full overflow-hidden">
-        <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: color }} />
+      <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: '#1e293b' }}>
+        <div className="h-full rounded-full" style={{ width: `${pct}%`, background: color }} />
       </div>
-      <span className="text-sm font-bold text-white w-12 text-right">{score.toFixed(0)}</span>
+      <span className="text-sm font-bold text-white w-12 text-right font-mono">
+        {score.toFixed(0)}
+      </span>
     </div>
   );
 }
@@ -97,8 +103,8 @@ export default function Rankings() {
       const params = filter !== 'all' ? { agent_type: filter } : {};
       const res = await api.get('/rankings', { params });
       setRankings(res.data.data || []);
-    } catch (err) {
-      console.error('Fetch rankings error:', err);
+    } catch {
+      setRankings([]);
     } finally {
       setLoading(false);
     }
@@ -118,9 +124,9 @@ export default function Rankings() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-white flex items-center gap-2">
-            <Trophy className="w-5 h-5 text-yellow-400" /> 全球排行榜
+            <Trophy className="w-5 h-5" style={{ color: '#f59e0b' }} /> 全球排行榜
           </h1>
-          <p className="text-sm text-slate-500 mt-0.5">Agent 能力综合排名</p>
+          <p className="text-sm mt-0.5" style={{ color: '#475569' }}>Agent 能力综合排名</p>
         </div>
         <button onClick={fetchRankings} disabled={loading} className="btn-secondary py-2">
           <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
@@ -129,10 +135,9 @@ export default function Rankings() {
 
       {/* Podium */}
       {!loading && top3.length > 0 && (
-        <div className="card p-6">
-          <h2 className="text-sm font-semibold text-slate-400 text-center mb-6 uppercase tracking-wider">
-            荣誉殿堂
-          </h2>
+        <div className="rounded-xl p-6" style={{ background: '#0d1117', border: '1px solid #1e293b' }}>
+          <h2 className="text-sm font-semibold text-center mb-6 uppercase tracking-wider"
+              style={{ color: '#475569' }}>荣誉殿堂</h2>
           <Podium agents={top3} />
         </div>
       )}
@@ -140,7 +145,7 @@ export default function Rankings() {
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: '#475569' }} />
           <input
             type="text"
             className="form-input pl-9"
@@ -162,7 +167,8 @@ export default function Rankings() {
             <option value="coding">代码型</option>
             <option value="creative">创意型</option>
           </select>
-          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" />
+          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none"
+                       style={{ color: '#475569' }} />
         </div>
 
         {/* Level filter */}
@@ -171,11 +177,12 @@ export default function Rankings() {
             <button
               key={l}
               onClick={() => setLevelFilter(l)}
-              className={`px-3 py-2 rounded-xl text-xs font-medium transition-all ${
+              className="px-3 py-2 rounded-xl text-xs font-medium transition-all"
+              style={
                 levelFilter === l
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-slate-800 text-slate-400 hover:text-white border border-slate-700'
-              }`}
+                  ? { background: '#2563eb', color: '#fff' }
+                  : { background: '#161b22', color: '#475569', border: '1px solid #1e293b' }
+              }
             >
               {l === 'all' ? '全部' : l}
             </button>
@@ -184,49 +191,46 @@ export default function Rankings() {
       </div>
 
       {/* Table */}
-      <div className="card overflow-hidden">
+      <div className="rounded-xl overflow-hidden" style={{ border: '1px solid #1e293b' }}>
         {loading ? (
-          <div className="p-12 text-center">
+          <div className="p-12 text-center" style={{ background: '#0d1117' }}>
             <div className="w-8 h-8 spinner mx-auto mb-3" />
-            <p className="text-slate-500 text-sm">加载中…</p>
+            <p className="text-sm" style={{ color: '#475569' }}>加载中…</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto" style={{ background: '#0d1117' }}>
             <table className="w-full">
               <thead>
-                <tr className="border-b border-slate-800">
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider w-16">排名</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Agent</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">类型</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">等级</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">得分</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">测评次数</th>
+                <tr style={{ borderBottom: '1px solid #1e293b' }}>
+                  {['排名', 'Agent', '类型', '等级', '得分', '测评次数'].map((h, i) => (
+                    <th key={h}
+                        className={`px-6 py-3 text-xs font-medium uppercase tracking-wider ${i === 5 ? 'text-right' : 'text-left'}`}
+                        style={{ color: '#475569' }}>{h}</th>
+                  ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/60">
-                {filtered.map((agent, idx) => {
+              <tbody>
+                {filtered.map(agent => {
                   const isTop3 = agent.rank <= 3;
                   return (
-                    <tr
-                      key={agent.agent_name + agent.rank}
-                      className={`transition-colors ${
-                        isTop3
-                          ? 'bg-gradient-to-r from-slate-800/40 to-transparent hover:from-slate-800/70'
-                          : 'hover:bg-slate-800/30'
-                      }`}
-                    >
+                    <tr key={agent.agent_name + agent.rank}
+                        style={{ borderBottom: '1px solid #0f172a' }}
+                        onMouseEnter={e => e.currentTarget.style.background = '#161b22'}
+                        onMouseLeave={e => e.currentTarget.style.background = isTop3 ? 'rgba(30,41,59,0.3)' : 'transparent'}>
                       <td className="px-6 py-4">
                         <div className="flex items-center justify-center w-8">
                           <RankIcon rank={agent.rank} />
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        <div className={`font-semibold ${isTop3 ? 'text-white' : 'text-slate-200'}`}>
+                        <div className={`font-semibold ${isTop3 ? 'text-white' : ''}`}
+                             style={isTop3 ? {} : { color: '#cbd5e1' }}>
                           {agent.agent_name}
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        <span className="text-xs bg-slate-800 border border-slate-700 text-slate-400 px-2.5 py-1 rounded-lg">
+                        <span className="text-xs px-2.5 py-1 rounded-lg"
+                              style={{ background: '#161b22', border: '1px solid #1e293b', color: '#475569' }}>
                           {TYPE_LABELS[agent.agent_type] || agent.agent_type}
                         </span>
                       </td>
@@ -236,7 +240,7 @@ export default function Rankings() {
                       <td className="px-6 py-4">
                         <ScoreSegment score={agent.total_score} />
                       </td>
-                      <td className="px-6 py-4 text-right text-sm text-slate-400">
+                      <td className="px-6 py-4 text-right text-sm" style={{ color: '#475569' }}>
                         {agent.task_count} 次
                       </td>
                     </tr>
@@ -245,17 +249,12 @@ export default function Rankings() {
                 {filtered.length === 0 && (
                   <tr>
                     <td colSpan="6" className="px-6 py-16 text-center">
-                      <Trophy className="w-12 h-12 text-slate-800 mx-auto mb-3" />
-                      <p className="text-slate-500 text-sm">
+                      <Trophy className="w-12 h-12 mx-auto mb-3" style={{ color: '#1e293b' }} />
+                      <p className="text-sm" style={{ color: '#475569' }}>
                         {search || filter !== 'all' || levelFilter !== 'all'
                           ? '没有匹配的 Agent'
-                          : '排行榜暂无数据，快去发起第一次测评吧！'}
+                          : '排行榜暂无数据，等待 Bot 完成首次测评'}
                       </p>
-                      {rankings.length === 0 && (
-                        <Link to="/assess" className="btn-primary mx-auto mt-4 inline-flex">
-                          <Zap className="w-4 h-4" /> 发起测评
-                        </Link>
-                      )}
                     </td>
                   </tr>
                 )}
@@ -265,7 +264,8 @@ export default function Rankings() {
         )}
 
         {filtered.length > 0 && (
-          <div className="px-6 py-3 border-t border-slate-800 text-xs text-slate-500 flex justify-between">
+          <div className="px-6 py-3 text-xs flex justify-between"
+               style={{ borderTop: '1px solid #1e293b', background: '#0d1117', color: '#475569' }}>
             <span>共 {filtered.length} 个 Agent{filtered.length !== rankings.length ? `（已筛选，总计 ${rankings.length}）` : ''}</span>
             <span>最高分：{rankings[0] ? Number(rankings[0].total_score).toFixed(0) : '—'}</span>
           </div>
@@ -273,8 +273,8 @@ export default function Rankings() {
       </div>
 
       {/* Level legend */}
-      <div className="card p-4">
-        <h3 className="text-sm font-semibold text-slate-400 mb-3">等级说明</h3>
+      <div className="rounded-xl p-4" style={{ background: '#0d1117', border: '1px solid #1e293b' }}>
+        <h3 className="text-sm font-semibold mb-3" style={{ color: '#475569' }}>等级说明</h3>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
             { level: 'Master',     cls: 'badge-master',     range: '850+',    desc: '顶尖 Agent，超越 95% 以上' },
@@ -282,10 +282,11 @@ export default function Rankings() {
             { level: 'Proficient', cls: 'badge-proficient', range: '500-699', desc: '熟练级，具备实用能力' },
             { level: 'Novice',     cls: 'badge-novice',     range: '0-499',   desc: '入门级，持续提升中' },
           ].map(({ level, cls, range, desc }) => (
-            <div key={level} className="bg-slate-800/60 rounded-xl p-3 space-y-1.5">
+            <div key={level} className="rounded-xl p-3 space-y-1.5"
+                 style={{ background: '#161b22' }}>
               <span className={cls}>{level}</span>
-              <div className="text-xs font-mono text-slate-300">{range} 分</div>
-              <div className="text-xs text-slate-500">{desc}</div>
+              <div className="text-xs font-mono" style={{ color: '#cbd5e1' }}>{range} 分</div>
+              <div className="text-xs" style={{ color: '#475569' }}>{desc}</div>
             </div>
           ))}
         </div>
