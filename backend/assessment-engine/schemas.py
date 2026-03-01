@@ -1,163 +1,202 @@
-from pydantic import BaseModel, Field
-from typing import Optional, List, Dict, Any
+"""OAEAS V2 Pydantic Schemas"""
 from datetime import datetime
+from typing import Optional, List, Any, Dict
+from pydantic import BaseModel, Field
 from enum import Enum
 
-# ============== Enums ==============
 
-class AgentType(str, Enum):
-    GENERAL = "general"
-    CODING = "coding"
-    CREATIVE = "creative"
+# ── Enums ────────────────────────────────────────────────────────────────────
+
+class Protocol(str, Enum):
+    OPENAI    = "openai"
+    ANTHROPIC = "anthropic"
+    OPENCLAW  = "openclaw"
+    HTTP      = "http"
+    MOCK      = "mock"   # test env: built-in mock agent
 
 class TaskStatus(str, Enum):
-    PENDING = "pending"
-    RUNNING = "running"
+    PENDING   = "pending"
+    RUNNING   = "running"
     COMPLETED = "completed"
-    FAILED = "failed"
+    FAILED    = "failed"
+    ABORTED   = "aborted"
+
+class Level(str, Enum):
+    NOVICE    = "Novice"
+    PROFICIENT = "Proficient"
+    EXPERT    = "Expert"
+    MASTER    = "Master"
 
 class PaymentChannel(str, Enum):
     WECHAT = "wechat"
     ALIPAY = "alipay"
     STRIPE = "stripe"
     PAYPAL = "paypal"
+    MOCK   = "mock"    # test env
 
-class PaymentStatus(str, Enum):
-    PENDING = "pending"
-    PAID = "paid"
-    FAILED = "failed"
-    REFUNDED = "refunded"
+class Currency(str, Enum):
+    CNY = "CNY"
+    USD = "USD"
 
-class Level(str, Enum):
-    NOVICE = "Novice"
-    PROFICIENT = "Proficient"
-    EXPERT = "Expert"
-    MASTER = "Master"
 
-# ============== Token Schemas ==============
+# ── Anonymous Token ───────────────────────────────────────────────────────────
+
+class AnonymousTokenCreate(BaseModel):
+    agent_id:     str = Field(..., min_length=1, max_length=128)
+    agent_name:   Optional[str] = None
+    protocol:     Protocol = Protocol.OPENAI
+    capabilities: Optional[List[str]] = None
+
+class AnonymousTokenResponse(BaseModel):
+    tmp_token:            str
+    expires_in:           int  # seconds
+    expires_at:           datetime
+    allowed_assessments:  int = 1
+
+
+# ── Formal Token ──────────────────────────────────────────────────────────────
 
 class TokenCreate(BaseModel):
-    name: str
-    description: Optional[str] = None
-    agent_type: AgentType = AgentType.GENERAL
-    max_uses: int = Field(default=100, ge=1, le=10000)
-    expires_days: Optional[int] = Field(default=None, ge=1, le=365)
+    name:         str
+    description:  Optional[str] = None
+    agent_type:   str = "general"
+    max_uses:     int = 100
+    expires_days: Optional[int] = None
 
 class TokenResponse(BaseModel):
-    id: str
+    id:         str
     token_code: str
-    name: str
-    description: Optional[str]
-    agent_type: str
-    status: str
-    max_uses: int
+    name:       str
+    status:     str
     used_count: int
+    max_uses:   int
     created_at: datetime
-    expires_at: Optional[datetime]
-    
+    expires_at: Optional[datetime] = None
+
     class Config:
         from_attributes = True
 
-# ============== Assessment Schemas ==============
 
-class AssessmentCreate(BaseModel):
-    token_code: str
-    agent_id: str
-    agent_name: str
-    agent_description: Optional[str] = None
+# ── Binding ───────────────────────────────────────────────────────────────────
+
+class BindingInitiate(BaseModel):
+    invite_code: str = Field(..., pattern=r"^OCBIND-[A-Z0-9]{6}-[A-Z0-9]{6}$")
+    agent_id:    str
+
+class InviteCodeResponse(BaseModel):
+    invite_code:  str
+    expires_at:   datetime
+    instructions: str
+
+
+# ── Assessment Task ───────────────────────────────────────────────────────────
+
+class ProtocolConfig(BaseModel):
+    protocol:     Protocol = Protocol.MOCK
+    endpoint_url: Optional[str] = None     # None / "mock" → use built-in mock agent
+    auth_header:  Optional[str] = None
+
+class TaskCreate(BaseModel):
+    agent_id:        str = Field(..., min_length=1, max_length=128)
+    agent_name:      str = Field(..., min_length=1, max_length=255)
+    protocol_config: ProtocolConfig = ProtocolConfig()
+    webhook_url:     Optional[str] = None
+
+class TaskResponse(BaseModel):
+    task_id:                    str
+    task_code:                  str
+    status:                     TaskStatus
+    estimated_duration_seconds: int = 300
+    phases:                     List[str] = ["tool_usage", "reasoning", "interaction", "stability"]
+    created_at:                 datetime
+
+    class Config:
+        from_attributes = True
+
+class TaskStatusResponse(BaseModel):
+    task_id:  str
+    status:   TaskStatus
+    phase:    int
+    progress: Dict[str, Any]
 
 class DimensionScore(BaseModel):
-    name: str
-    score: float
-    max_score: float
-    weight: float
+    score:      float
+    max_score:  float
+    percentage: float
 
-class AssessmentResponse(BaseModel):
-    id: str
-    task_code: str
-    token_id: str
-    agent_id: str
+class AssessmentReport(BaseModel):
+    report_code:           str
+    task_code:             str
+    total_score:           float
+    level:                 Level
+    percentile:            float
+    scores:                Dict[str, DimensionScore]
+    summary:               Dict[str, Any]
+    assessment_meta:       Dict[str, Any]
+    report_hash:           str
+    deep_report_available: bool = True
+    deep_report_price:     Dict[str, float] = {"cny": 9.9, "usd": 1.0}
+    is_deep_report:        bool = False
+    # Deep report fields (None if not unlocked)
+    detailed_dimensions:   Optional[Dict[str, Any]] = None
+    recommendations:       Optional[List[Dict[str, Any]]] = None
+
+
+# ── Payment ───────────────────────────────────────────────────────────────────
+
+class PaymentOrderCreate(BaseModel):
+    report_code: str
+    channel:     PaymentChannel = PaymentChannel.MOCK
+    currency:    Currency = Currency.CNY
+
+class PaymentOrderResponse(BaseModel):
+    order_code: str
+    amount:     float
+    currency:   str
+    channel:    str
+    qr_url:     Optional[str] = None
+    expires_at: datetime
+
+class PaymentStatusResponse(BaseModel):
+    order_code:      str
+    status:          str   # pending/paid/failed/expired/refunded
+    paid_at:         Optional[datetime] = None
+    deep_report_url: Optional[str] = None
+    pdf_url:         Optional[str] = None
+
+
+# ── Rankings ──────────────────────────────────────────────────────────────────
+
+class RankingEntry(BaseModel):
+    rank:       int
     agent_name: str
-    status: str
+    agent_type: str
+    protocol:   Optional[str] = None
     total_score: float
-    level: Optional[str]
-    dimensions: List[DimensionScore]
-    duration_seconds: Optional[int]
-    created_at: datetime
-    
+    level:      str
+    task_count: int
+    updated_at: datetime
+
     class Config:
         from_attributes = True
 
-class AssessmentStatus(BaseModel):
-    task_id: str
-    status: str
-    progress_percent: int
-    current_test: Optional[str]
-    estimated_remaining_seconds: Optional[int]
-
-# ============== Report Schemas ==============
-
-class ReportSummary(BaseModel):
-    total_score: float
-    level: str
-    ranking_percentile: float
-    strength_areas: List[str]
-    improvement_areas: List[str]
-
-class ReportDetail(BaseModel):
-    id: str
-    report_code: str
-    task_id: str
-    summary: ReportSummary
-    dimensions: Dict[str, Any]
-    test_cases: List[Dict[str, Any]]
-    recommendations: List[Dict[str, Any]]
-    is_deep_report: bool
-    created_at: datetime
-
-# ============== Payment Schemas ==============
-
-class PaymentCreate(BaseModel):
-    task_id: str
-    report_id: str
-    channel: PaymentChannel
-    currency: str = "CNY"
-
-class PaymentResponse(BaseModel):
-    order_code: str
-    amount: float
-    currency: str
-    channel: str
-    status: str
-    qr_code_url: Optional[str] = None
-    pay_url: Optional[str] = None
-    client_secret: Optional[str] = None
-    expire_seconds: int = 300
-
-# ============== Ranking Schemas ==============
-
-class RankingItem(BaseModel):
-    rank: int
-    agent_name: str
-    agent_type: str
-    total_score: float
-    level: str
-    task_count: int
-
-class RankingList(BaseModel):
-    items: List[RankingItem]
+class RankingsResponse(BaseModel):
+    items: List[RankingEntry]
     total: int
-    page: int
-    page_size: int
+    page:  int
+    limit: int
 
-# ============== API Response ==============
+
+# ── Shared Error ──────────────────────────────────────────────────────────────
+
+class ErrorDetail(BaseModel):
+    code:    str
+    message: str
+    details: Dict[str, Any] = {}
 
 class APIResponse(BaseModel):
-    code: int = 200
-    message: str = "success"
-    data: Optional[Any] = None
-
-class ErrorResponse(BaseModel):
-    code: int
-    message: str
-    detail: Optional[str] = None
+    success:    bool
+    data:       Optional[Any] = None
+    error:      Optional[ErrorDetail] = None
+    request_id: Optional[str] = None
+    timestamp:  datetime = Field(default_factory=datetime.utcnow)

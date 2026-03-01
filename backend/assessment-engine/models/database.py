@@ -1,149 +1,257 @@
-from sqlalchemy import create_engine, Column, String, Float, DateTime, Text, JSON, Integer
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+"""OAEAS V2 SQLAlchemy ORM Models"""
 from datetime import datetime
+from sqlalchemy import (
+    Column, String, Integer, Boolean, Numeric, BigInteger,
+    DateTime, Text, ForeignKey, JSON
+)
+from sqlalchemy.dialects.postgresql import UUID, INET
+from sqlalchemy.orm import declarative_base
 import uuid
 
 Base = declarative_base()
 
-def generate_uuid():
-    return str(uuid.uuid4())
 
 class User(Base):
-    """用户表"""
     __tablename__ = "users"
-    
-    id = Column(String, primary_key=True, default=generate_uuid)
-    email = Column(String, unique=True, index=True)
-    name = Column(String)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    id                  = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    email               = Column(String(255), unique=True, nullable=False)
+    name                = Column(String(255))
+    magic_link_token    = Column(String(128))
+    magic_link_expires  = Column(DateTime(timezone=True))
+    last_login_at       = Column(DateTime(timezone=True))
+    login_count         = Column(Integer, default=0)
+    metadata_           = Column("metadata", JSON, default=dict)
+    created_at          = Column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at          = Column(DateTime(timezone=True), default=datetime.utcnow)
+
 
 class Token(Base):
-    """测评Token表"""
     __tablename__ = "tokens"
-    
-    id = Column(String, primary_key=True, default=generate_uuid)
-    token_code = Column(String, unique=True, index=True)  # OCB-XXXX-XXXX
-    name = Column(String)
+    id          = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    token_code  = Column(String(20), unique=True, nullable=False)
+    name        = Column(String(255), nullable=False)
     description = Column(Text)
-    agent_type = Column(String)  # general/coding/creative
-    status = Column(String, default="active")  # active/paused/expired
-    max_uses = Column(Integer, default=100)
-    used_count = Column(Integer, default=0)
-    created_by = Column(String)  # user_id
-    created_at = Column(DateTime, default=datetime.utcnow)
-    expires_at = Column(DateTime, nullable=True)
+    agent_type  = Column(String(50), default="general")
+    status      = Column(String(50), default="active")
+    max_uses    = Column(Integer, default=100)
+    used_count  = Column(Integer, default=0)
+    created_by  = Column(UUID(as_uuid=True), ForeignKey("users.id"))
+    created_at  = Column(DateTime(timezone=True), default=datetime.utcnow)
+    expires_at  = Column(DateTime(timezone=True))
+
+
+class AnonymousToken(Base):
+    __tablename__ = "anonymous_tokens"
+    id          = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    token_value = Column(String(64), unique=True, nullable=False)
+    agent_id    = Column(String(128), nullable=False)
+    agent_name  = Column(String(255))
+    protocol    = Column(String(32), default="openai")
+    ip_address  = Column(INET)
+    expires_at  = Column(DateTime(timezone=True), nullable=False)
+    used        = Column(Boolean, default=False)
+    task_id     = Column(UUID(as_uuid=True))
+    created_at  = Column(DateTime(timezone=True), default=datetime.utcnow)
+
+
+class TokenUsageLog(Base):
+    __tablename__ = "token_usage_logs"
+    id         = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    token_id   = Column(String(128), nullable=False)
+    token_type = Column(String(20), nullable=False)
+    action     = Column(String(64), nullable=False)
+    ip_address = Column(INET)
+    user_agent = Column(String(512))
+    metadata_  = Column("metadata", JSON, default=dict)
+    logged_at  = Column(DateTime(timezone=True), default=datetime.utcnow)
+
+
+class InviteCode(Base):
+    __tablename__ = "invite_codes"
+    id            = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    code          = Column(String(20), unique=True, nullable=False)
+    human_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    used          = Column(Boolean, default=False)
+    used_by_agent = Column(String(128))
+    expires_at    = Column(DateTime(timezone=True), nullable=False)
+    created_at    = Column(DateTime(timezone=True), default=datetime.utcnow)
+
+
+class BotHumanBinding(Base):
+    __tablename__ = "bot_human_bindings"
+    id             = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    human_user_id  = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    agent_token_id = Column(UUID(as_uuid=True), ForeignKey("tokens.id"))
+    anon_token_id  = Column(UUID(as_uuid=True), ForeignKey("anonymous_tokens.id"))
+    invite_code    = Column(String(20), nullable=False)
+    status         = Column(String(32), default="pending_confirm")
+    agent_id       = Column(String(128))
+    initiated_at   = Column(DateTime(timezone=True), default=datetime.utcnow)
+    confirmed_at   = Column(DateTime(timezone=True))
+    expires_at     = Column(DateTime(timezone=True), nullable=False)
+
 
 class AssessmentTask(Base):
-    """测评任务表"""
     __tablename__ = "assessment_tasks"
-    
-    id = Column(String, primary_key=True, default=generate_uuid)
-    task_code = Column(String, unique=True, index=True)  # OCBT-XXXXXXXX
-    token_id = Column(String, index=True)
-    agent_id = Column(String)  # 被测Agent标识
-    agent_name = Column(String)
-    status = Column(String, default="pending")  # pending/running/completed/failed
-    
-    # 4维度评分 (0-1000)
-    tool_score = Column(Float, default=0)  # OpenClaw工具调用 400分
-    reasoning_score = Column(Float, default=0)  # 基础认知推理 300分
-    interaction_score = Column(Float, default=0)  # 交互意图理解 200分
-    stability_score = Column(Float, default=0)  # 稳定性合规 100分
-    total_score = Column(Float, default=0)  # 总分
-    
-    level = Column(String)  # Novice/Proficient/Expert/Master
+    id               = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    task_code        = Column(String(30), unique=True, nullable=False)
+    token_id         = Column(UUID(as_uuid=True), ForeignKey("tokens.id"))
+    anon_token_id    = Column(UUID(as_uuid=True), ForeignKey("anonymous_tokens.id"))
+    agent_id         = Column(String(128), nullable=False)
+    agent_name       = Column(String(255), nullable=False)
+    agent_protocol   = Column(String(32), default="openai")
+    endpoint_url     = Column(String(512))
+    auth_header      = Column(String(512))
+    seed             = Column(BigInteger)
+    status           = Column(String(32), default="pending")
+    phase            = Column(Integer, default=0)
+    cases_total      = Column(Integer, default=45)
+    cases_completed  = Column(Integer, default=0)
+    timeout_count    = Column(Integer, default=0)
+    veto_triggered   = Column(Boolean, default=False)
+    veto_reason      = Column(String(512))
+    anti_cheat_flags = Column(JSON, default=list)
+    tool_score       = Column(Numeric(8, 2), default=0)
+    reasoning_score  = Column(Numeric(8, 2), default=0)
+    interaction_score = Column(Numeric(8, 2), default=0)
+    stability_score  = Column(Numeric(8, 2), default=0)
+    total_score      = Column(Numeric(8, 2), default=0)
+    level            = Column(String(32))
     duration_seconds = Column(Integer)
-    
-    created_at = Column(DateTime, default=datetime.utcnow)
-    started_at = Column(DateTime, nullable=True)
-    completed_at = Column(DateTime, nullable=True)
+    webhook_url      = Column(String(512))
+    created_at       = Column(DateTime(timezone=True), default=datetime.utcnow)
+    started_at       = Column(DateTime(timezone=True))
+    completed_at     = Column(DateTime(timezone=True))
+
 
 class TestCase(Base):
-    """测试用例表"""
     __tablename__ = "test_cases"
-    
-    id = Column(String, primary_key=True, default=generate_uuid)
-    case_type = Column(String)  # tool/reasoning/interaction/stability
-    difficulty = Column(String)  # easy/medium/hard
-    content = Column(JSON)  # 用例内容
+    id              = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    case_type       = Column(String(50), nullable=False)
+    difficulty      = Column(String(20), default="medium")
+    content         = Column(JSON, nullable=False)
     expected_result = Column(JSON)
-    weight = Column(Float, default=1.0)  # 权重
-    tags = Column(JSON, default=list)  # 标签
+    weight          = Column(Numeric(3, 2), default=1.0)
+    tags            = Column(JSON, default=list)
+
 
 class TestResult(Base):
-    """测试结果表"""
     __tablename__ = "test_results"
-    
-    id = Column(String, primary_key=True, default=generate_uuid)
-    task_id = Column(String, index=True)
-    case_id = Column(String, index=True)
-    
-    status = Column(String)  # passed/failed/error
-    score = Column(Float, default=0)
+    id               = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    task_id          = Column(UUID(as_uuid=True), ForeignKey("assessment_tasks.id"))
+    case_id          = Column(UUID(as_uuid=True), ForeignKey("test_cases.id"))
+    dimension        = Column(String(32))
+    difficulty       = Column(String(20))
+    status           = Column(String(32))
+    score            = Column(Numeric(8, 2), default=0)
+    max_score        = Column(Numeric(8, 2), default=0)
     response_time_ms = Column(Integer)
-    actual_result = Column(JSON)
-    error_message = Column(Text, nullable=True)
-    
-    created_at = Column(DateTime, default=datetime.utcnow)
+    actual_result    = Column(JSON)
+    error_message    = Column(Text)
+    created_at       = Column(DateTime(timezone=True), default=datetime.utcnow)
+
+
+class SandboxExecution(Base):
+    __tablename__ = "sandbox_executions"
+    id            = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    task_id       = Column(UUID(as_uuid=True), ForeignKey("assessment_tasks.id"), nullable=False)
+    case_id       = Column(UUID(as_uuid=True))
+    tool_name     = Column(String(64), nullable=False)
+    input_params  = Column(JSON)
+    output_result = Column(JSON)
+    duration_ms   = Column(Integer)
+    success       = Column(Boolean)
+    error_message = Column(Text)
+    called_at     = Column(DateTime(timezone=True), default=datetime.utcnow)
+
+
+class AntiCheatLog(Base):
+    __tablename__ = "anti_cheat_logs"
+    id         = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    task_id    = Column(UUID(as_uuid=True), ForeignKey("assessment_tasks.id"), nullable=False)
+    layer      = Column(Integer, nullable=False)
+    check_type = Column(String(64), nullable=False)
+    result     = Column(String(20), nullable=False)
+    evidence   = Column(Text)
+    metadata_  = Column("metadata", JSON, default=dict)
+    checked_at = Column(DateTime(timezone=True), default=datetime.utcnow)
+
 
 class Report(Base):
-    """测评报告表"""
     __tablename__ = "reports"
-    
-    id = Column(String, primary_key=True, default=generate_uuid)
-    report_code = Column(String, unique=True, index=True)  # OCR-XXXXXXXX
-    task_id = Column(String, index=True)
-    
-    # 报告内容
-    summary = Column(JSON)  # 摘要数据
-    dimensions = Column(JSON)  # 各维度详情
-    test_cases = Column(JSON)  # 测试用例结果
-    recommendations = Column(JSON)  # 改进建议
-    ranking_percentile = Column(Float)  # 排名百分位
-    
-    is_deep_report = Column(Integer, default=0)  # 0=免费版 1=深度版
-    unlocked_at = Column(DateTime, nullable=True)
-    
-    created_at = Column(DateTime, default=datetime.utcnow)
+    id               = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    report_code      = Column(String(30), unique=True, nullable=False)
+    task_id          = Column(UUID(as_uuid=True), ForeignKey("assessment_tasks.id"))
+    summary          = Column(JSON)
+    dimensions       = Column(JSON)
+    test_cases       = Column(JSON, default=list)
+    recommendations  = Column(JSON, default=list)
+    is_deep_report   = Column(Integer, default=0)
+    report_hash      = Column(String(80))
+    bot_payload      = Column(JSON)
+    human_html_url   = Column(String(512))
+    pdf_url          = Column(String(512))
+    payment_order_id = Column(UUID(as_uuid=True))
+    unlocked_at      = Column(DateTime(timezone=True))
+    created_at       = Column(DateTime(timezone=True), default=datetime.utcnow)
+
+
+class ReportHash(Base):
+    __tablename__ = "report_hashes"
+    id             = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    report_id      = Column(UUID(as_uuid=True), ForeignKey("reports.id"), unique=True, nullable=False)
+    hash_value     = Column(String(80), nullable=False)
+    hash_algorithm = Column(String(20), default="sha256")
+    signed_at      = Column(DateTime(timezone=True), default=datetime.utcnow)
+    payload_size   = Column(Integer)
+
 
 class PaymentOrder(Base):
-    """支付订单表"""
     __tablename__ = "payment_orders"
-    
-    id = Column(String, primary_key=True, default=generate_uuid)
-    order_code = Column(String, unique=True, index=True)  # OCBYYYYMMDDHHMMSS+6位
-    user_id = Column(String, index=True)
-    task_id = Column(String, index=True)
-    report_id = Column(String, index=True)
-    
-    amount = Column(Float)
-    currency = Column(String, default="CNY")
-    channel = Column(String)  # wechat/alipay/stripe/paypal
-    status = Column(String, default="pending")  # pending/paid/failed/refunded
-    
-    paid_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    id            = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    order_code    = Column(String(40), unique=True, nullable=False)
+    report_id     = Column(UUID(as_uuid=True), ForeignKey("reports.id"))
+    user_id       = Column(UUID(as_uuid=True), ForeignKey("users.id"))
+    anon_token_id = Column(UUID(as_uuid=True), ForeignKey("anonymous_tokens.id"))
+    amount        = Column(Numeric(10, 2), nullable=False)
+    currency      = Column(String(10), default="CNY")
+    channel       = Column(String(20))
+    status        = Column(String(20), default="pending")
+    qr_url        = Column(String(512))
+    paid_at       = Column(DateTime(timezone=True))
+    expires_at    = Column(DateTime(timezone=True))
+    created_at    = Column(DateTime(timezone=True), default=datetime.utcnow)
+
+
+class WebhookSubscription(Base):
+    __tablename__ = "webhook_subscriptions"
+    id           = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    task_id      = Column(UUID(as_uuid=True), ForeignKey("assessment_tasks.id"), nullable=False)
+    endpoint_url = Column(String(512), nullable=False)
+    secret       = Column(String(128))
+    events       = Column(JSON, default=lambda: ["task.completed"])
+    active       = Column(Boolean, default=True)
+    created_at   = Column(DateTime(timezone=True), default=datetime.utcnow)
+
 
 class Ranking(Base):
-    """排行榜表"""
     __tablename__ = "rankings"
-    
-    id = Column(String, primary_key=True, default=generate_uuid)
-    agent_name = Column(String, index=True)
-    agent_type = Column(String)
-    total_score = Column(Float)
-    level = Column(String)
-    rank = Column(Integer)
-    task_count = Column(Integer, default=1)
-    updated_at = Column(DateTime, default=datetime.utcnow)
+    id          = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    agent_id    = Column(String(128))
+    agent_name  = Column(String(255), nullable=False)
+    agent_type  = Column(String(50), default="general")
+    protocol    = Column(String(32))
+    total_score = Column(Numeric(8, 2), default=0)
+    level       = Column(String(32))
+    rank        = Column(Integer)
+    task_count  = Column(Integer, default=0)
+    updated_at  = Column(DateTime(timezone=True), default=datetime.utcnow)
+    created_at  = Column(DateTime(timezone=True), default=datetime.utcnow)
+
 
 class SystemConfig(Base):
-    """系统配置表"""
-    __tablename__ = "system_configs"
-    
-    id = Column(String, primary_key=True, default=generate_uuid)
-    config_key = Column(String, unique=True, index=True)
-    config_value = Column(JSON)
-    updated_at = Column(DateTime, default=datetime.utcnow)
+    __tablename__ = "system_config"
+    key        = Column(String(100), primary_key=True)
+    value      = Column(Text, nullable=False)
+    description = Column(Text)
+    updated_at = Column(DateTime(timezone=True), default=datetime.utcnow)
