@@ -120,7 +120,7 @@ services:
       - ./backend/assessment-engine:/app
       - /app/__pycache__
     ports:
-      - "8001:8000"
+      - "8002:8000"
     depends_on:
       postgres:
         condition: service_healthy
