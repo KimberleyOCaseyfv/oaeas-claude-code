@@ -10,14 +10,13 @@ const api = axios.create({
   timeout: 30000,
 });
 
-// 请求拦截器
+// 请求拦截器 – 自动附加 Human JWT
 api.interceptors.request.use(
   (config) => {
-    // 可以在这里添加认证token
-    // const token = localStorage.getItem('token');
-    // if (token) {
-    //   config.headers.Authorization = `Bearer ${token}`;
-    // }
+    const token = localStorage.getItem('human_jwt');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
     return config;
   },
   (error) => {

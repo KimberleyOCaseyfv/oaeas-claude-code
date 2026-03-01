@@ -53,15 +53,14 @@ function CreateAssessment() {
 
   const startAssessment = async () => {
     if (!createdTask) return;
-    
+
     setAssessing(true);
     try {
-      await api.post(`/assessments/${createdTask.task_id}/start`);
-      // 轮询状态
+      await api.post(`/api/v1/tasks/${createdTask.task_id}/start`);
       pollStatus(createdTask.task_id);
     } catch (error) {
       console.error('Failed to start assessment:', error);
-      alert('启动测评失败');
+      alert('启动测评失败: ' + (error.response?.data?.detail || error.message));
       setAssessing(false);
     }
   };
@@ -69,21 +68,20 @@ function CreateAssessment() {
   const pollStatus = async (taskId) => {
     const interval = setInterval(async () => {
       try {
-        const response = await api.get(`/assessments/${taskId}/status`);
+        const response = await api.get(`/api/v1/tasks/${taskId}/status`);
         const status = response.data.data;
-        
+
         if (status.status === 'completed') {
           clearInterval(interval);
           setAssessing(false);
-          // 获取报告并跳转
           const reportRes = await api.get(`/reports/task/${taskId}`);
           if (reportRes.data.data) {
             navigate(`/reports/${reportRes.data.data.report_code}`);
           }
-        } else if (status.status === 'failed') {
+        } else if (status.status === 'failed' || status.status === 'aborted') {
           clearInterval(interval);
           setAssessing(false);
-          alert('测评失败');
+          alert(status.status === 'aborted' ? '测评被终止（违规检测触发）' : '测评失败，请重试');
         }
       } catch (error) {
         console.error('Failed to poll status:', error);
@@ -181,7 +179,7 @@ function CreateAssessment() {
             <ul className="text-sm text-slate-400 space-y-1">
               <li>• 测评预计耗时 3-5 分钟</li>
               <li>• 包含4个维度共1000分评估</li>
-              <li>• 生成基础报告免费，深度报告 ¥9.9</li>
+              <li>• 完整报告免费生成，包含4维度评分与改进建议</li>
               <li>• 完成后自动进入排行榜</li>
             </ul>
           </div>

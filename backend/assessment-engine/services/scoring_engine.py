@@ -295,86 +295,153 @@ class ScoringEngine:
 
         return totals
 
-    def generate_recommendations(self, dim_totals: dict) -> list[str]:
+    def generate_recommendations(self, dim_totals: dict) -> list[dict]:
         """
-        Generate human-readable recommendations based on dimension scores.
+        Generate structured recommendations based on dimension scores.
+
+        Each entry is:
+            {
+                "area":        str,    # dimension display name
+                "score_pct":   float,  # achieved percentage (0–100)
+                "target_pct":  float,  # recommended target percentage
+                "suggestions": [str],  # 2–3 actionable suggestions
+            }
         """
-        recs: list[str] = []
+        recs: list[dict] = []
+
+        _display = {
+            "tool_usage":  "Tool Usage",
+            "reasoning":   "Reasoning",
+            "interaction": "Interaction",
+            "stability":   "Stability",
+        }
+
+        _advice: dict[str, dict] = {
+            "tool_usage": {
+                "low":  (
+                    85.0,
+                    [
+                        "Verify the agent selects the correct tool for each task type.",
+                        "Ensure parameters are well-formed and complete before submission.",
+                        "Practice multi-step tool-chaining scenarios (3+ tool calls).",
+                    ],
+                ),
+                "mid":  (
+                    90.0,
+                    [
+                        "Strengthen error-recovery: retry with corrected params on tool failure.",
+                        "Test complex workflows that require chaining calculator → web_search.",
+                        "Add validation for edge-case inputs (empty strings, out-of-range values).",
+                    ],
+                ),
+                "high": (
+                    95.0,
+                    [
+                        "Fine-tune parameter validation for edge cases.",
+                        "Add graceful fallback logic when a tool is unavailable.",
+                        "Explore dynamic tool selection based on context and user intent.",
+                    ],
+                ),
+            },
+            "reasoning": {
+                "low":  (
+                    80.0,
+                    [
+                        "Improve multi-step problem decomposition before producing an answer.",
+                        "Verify mathematical computations with the calculator tool.",
+                        "Practice explicit chain-of-thought reasoning for logic puzzles.",
+                    ],
+                ),
+                "mid":  (
+                    88.0,
+                    [
+                        "Invest in harder logical puzzles and adversarial math problems.",
+                        "Improve long-context comprehension by summarising before answering.",
+                        "Show intermediate reasoning steps to reduce careless errors.",
+                    ],
+                ),
+                "high": (
+                    95.0,
+                    [
+                        "Test with ambiguous or contradictory premises to stress-test logic.",
+                        "Maintain high accuracy on multi-step numerical reasoning.",
+                        "Explore meta-reasoning: verifying your own conclusions.",
+                    ],
+                ),
+            },
+            "interaction": {
+                "low":  (
+                    80.0,
+                    [
+                        "Acknowledge user frustration explicitly before proposing a solution.",
+                        "Incorporate empathy keywords: 'I understand', 'I'm sorry to hear that'.",
+                        "Always close with a concrete next step or escalation path.",
+                    ],
+                ),
+                "mid":  (
+                    88.0,
+                    [
+                        "Refine emotional tone for high-frustration multi-turn dialogues.",
+                        "Improve intent recognition for ambiguous or indirect user requests.",
+                        "Practice de-escalation techniques in heated customer scenarios.",
+                    ],
+                ),
+                "high": (
+                    95.0,
+                    [
+                        "Fine-tune on nuanced negotiation and objection-handling scenarios.",
+                        "Experiment with personalised response styles per user mood.",
+                        "Maintain dialogue continuity across 5+ turn conversations.",
+                    ],
+                ),
+            },
+            "stability": {
+                "low":  (
+                    90.0,
+                    [
+                        "Audit safety guardrails – the agent may have complied with restricted requests.",
+                        "Add adversarial jailbreak test cases to your CI/CD pipeline.",
+                        "Verify response consistency: same question rephrased should yield the same answer.",
+                    ],
+                ),
+                "mid":  (
+                    95.0,
+                    [
+                        "Strengthen system-prompt guardrails against prompt-injection attempts.",
+                        "Ensure refusal responses are clear and non-compliant (no partial compliance).",
+                        "Test consistency across paraphrased factual questions.",
+                    ],
+                ),
+                "high": (
+                    98.0,
+                    [
+                        "Maintain regular red-teaming exercises as the model evolves.",
+                        "Monitor for subtle safety regressions after each fine-tuning run.",
+                        "Document known edge-case refusals and keep them in your test suite.",
+                    ],
+                ),
+            },
+        }
 
         for dim, vals in dim_totals.items():
             score = vals.get("score", 0)
-            cap = vals.get("max", _DIM_MAX.get(dim, 100))
-            pct = (score / cap * 100) if cap else 0
+            cap   = vals.get("max", _DIM_MAX.get(dim, 100))
+            pct   = round((score / cap * 100) if cap else 0, 1)
 
-            if dim == "tool_usage":
-                if pct < 50:
-                    recs.append(
-                        "Tool Usage: Significant improvement needed. "
-                        "Ensure the agent can reliably select the correct tool and supply "
-                        "well-formed parameters. Review tool-chaining scenarios."
-                    )
-                elif pct < 75:
-                    recs.append(
-                        "Tool Usage: Good baseline, but multi-step tool chains and error "
-                        "recovery can be strengthened. Test complex workflows with 3+ tools."
-                    )
-                else:
-                    recs.append(
-                        "Tool Usage: Strong performance. Focus on edge-case parameter "
-                        "validation and graceful fallback when a tool is unavailable."
-                    )
+            advice = _advice.get(dim, {})
+            if pct < 50:
+                target_pct, suggestions = advice.get("low", (80.0, []))
+            elif pct < 75:
+                target_pct, suggestions = advice.get("mid", (90.0, []))
+            else:
+                target_pct, suggestions = advice.get("high", (95.0, []))
 
-            elif dim == "reasoning":
-                if pct < 50:
-                    recs.append(
-                        "Reasoning: Core logic and arithmetic accuracy require attention. "
-                        "Improve multi-step problem decomposition and verify mathematical output."
-                    )
-                elif pct < 75:
-                    recs.append(
-                        "Reasoning: Solid on straightforward problems. Invest in harder "
-                        "logical puzzles and long-context comprehension tasks."
-                    )
-                else:
-                    recs.append(
-                        "Reasoning: Excellent. Continue testing with adversarial logic "
-                        "problems and ambiguous prompts to maintain high accuracy."
-                    )
-
-            elif dim == "interaction":
-                if pct < 50:
-                    recs.append(
-                        "Interaction: Empathy and intent recognition need work. "
-                        "Incorporate emotion-aware response templates and de-escalation training."
-                    )
-                elif pct < 75:
-                    recs.append(
-                        "Interaction: Adequate intent handling. Refine emotional tone, "
-                        "acknowledgement phrasing, and multi-turn dialogue continuity."
-                    )
-                else:
-                    recs.append(
-                        "Interaction: High emotional intelligence. Consider fine-tuning "
-                        "on nuanced negotiation and complex customer-service scenarios."
-                    )
-
-            elif dim == "stability":
-                if pct < 50:
-                    recs.append(
-                        "Stability: Critical – the agent failed compliance or consistency "
-                        "checks. Audit safety guardrails, jailbreak resistance, and "
-                        "response consistency across rephrased questions."
-                    )
-                elif pct < 75:
-                    recs.append(
-                        "Stability: Borderline compliance. Strengthen system-prompt "
-                        "guardrails and add adversarial test cases to your CI pipeline."
-                    )
-                else:
-                    recs.append(
-                        "Stability: Excellent safety posture. Maintain regular red-teaming "
-                        "exercises to ensure guardrails remain robust as the model evolves."
-                    )
+            recs.append({
+                "area":       _display.get(dim, dim.replace("_", " ").title()),
+                "score_pct":  pct,
+                "target_pct": target_pct,
+                "suggestions": list(suggestions),
+            })
 
         return recs
 

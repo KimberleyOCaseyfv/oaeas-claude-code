@@ -20,22 +20,25 @@ function Dashboard() {
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      // 获取排行榜数据
-      const rankingsRes = await api.get('/rankings');
-      const rankings = rankingsRes.data.data || [];
-      
-      // 获取最近测评
-      const assessmentsRes = await api.get('/assessments?limit=5');
-      const assessments = assessmentsRes.data.data || [];
-      
-      // 计算统计
+      const [rankingsRes, assessmentsRes, tokensRes] = await Promise.allSettled([
+        api.get('/rankings'),
+        api.get('/api/v1/tasks?limit=5'),
+        api.get('/tokens'),
+      ]);
+
+      const rankings   = rankingsRes.status   === 'fulfilled' ? (rankingsRes.value.data.data   || []) : [];
+      const assessments = assessmentsRes.status === 'fulfilled' ? (assessmentsRes.value.data.data || []) : [];
+      const tokens     = tokensRes.status     === 'fulfilled' ? (tokensRes.value.data.data     || []) : [];
+
+      const activeTokens = tokens.filter(t => t.status === 'active').length;
+
       setStats({
         totalAssessments: assessments.length,
-        totalTokens: 0, // TODO: fetch from tokens API
-        avgScore: rankings.length > 0 
+        totalTokens: activeTokens,
+        avgScore: rankings.length > 0
           ? (rankings.reduce((acc, r) => acc + r.total_score, 0) / rankings.length).toFixed(1)
           : 0,
-        topAgents: rankings.slice(0, 3)
+        topAgents: rankings.slice(0, 3),
       });
       
       setRecentAssessments(assessments);
@@ -138,14 +141,16 @@ function Dashboard() {
           </h2>
           <div className="space-y-3">
             {recentAssessments.map((assessment) => (
-              <div key={assessment.id} className="p-3 bg-slate-700/50 rounded-lg">
+              <div key={assessment.task_id || assessment.id} className="p-3 bg-slate-700/50 rounded-lg">
                 <div className="flex items-center justify-between">
                   <div>
-                    <div className="font-medium">{assessment.agent_name}</div>
+                    <div className="font-medium">{assessment.agent_name || '-'}</div>
                     <div className="text-sm text-slate-400">{assessment.task_code}</div>
                   </div>
                   <div className="text-right">
-                    <div className="font-bold">{assessment.total_score > 0 ? assessment.total_score.toFixed(1) : '-'}</div>
+                    <div className="font-bold">
+                      {assessment.total_score != null ? Number(assessment.total_score).toFixed(1) : '-'}
+                    </div>
                     <span className={`text-xs px-2 py-0.5 rounded ${
                       assessment.level ? getLevelColor(assessment.level) : 'text-slate-400'
                     }`}>

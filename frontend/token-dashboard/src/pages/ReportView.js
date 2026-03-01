@@ -40,8 +40,7 @@ function ReportView() {
   };
 
   const handleDownload = () => {
-    // TODO: 实现PDF下载
-    alert('PDF下载功能开发中...');
+    window.print();
   };
 
   if (loading) {
@@ -91,11 +90,13 @@ function ReportView() {
             <div className="text-sm text-slate-400">总分 / 1000</div>
           </div>
           <div className="text-center p-4 bg-slate-700/50 rounded-lg">
-            <div className="text-3xl font-bold text-green-400">{summary.ranking_percentile.toFixed(1)}%</div>
+            <div className="text-3xl font-bold text-green-400">
+              {Number(summary.ranking_percentile ?? summary.percentile ?? 0).toFixed(1)}%
+            </div>
             <div className="text-sm text-slate-400">排名百分位</div>
           </div>
           <div className="text-center p-4 bg-slate-700/50 rounded-lg">
-            <div className="text-3xl font-bold text-purple-400">完整版</div>
+            <div className="text-3xl font-bold text-purple-400">免费完整版</div>
             <div className="text-sm text-slate-400">🎉 限时免费</div>
           </div>
         </div>
@@ -161,22 +162,35 @@ function ReportView() {
           改进建议
         </h2>
         <div className="space-y-4">
-          {recommendations.map((rec, index) => (
-            <div key={index} className="p-4 bg-slate-700/50 rounded-lg">
-              <div className="flex items-center gap-2 mb-2">
-                <Award className="w-4 h-4 text-blue-400" />
-                <span className="font-medium">{rec.area}</span>
-                <span className="text-sm text-slate-400">
-                  ({rec.score.toFixed(1)} → {rec.target})
-                </span>
+          {(recommendations || []).map((rec, index) => {
+            // Support both structured objects and plain strings
+            if (typeof rec === 'string') {
+              return (
+                <div key={index} className="p-4 bg-slate-700/50 rounded-lg">
+                  <div className="flex items-start gap-2">
+                    <Award className="w-4 h-4 text-blue-400 mt-0.5 shrink-0" />
+                    <p className="text-sm text-slate-300">{rec}</p>
+                  </div>
+                </div>
+              );
+            }
+            return (
+              <div key={index} className="p-4 bg-slate-700/50 rounded-lg">
+                <div className="flex items-center gap-2 mb-2">
+                  <Award className="w-4 h-4 text-blue-400" />
+                  <span className="font-medium">{rec.area}</span>
+                  <span className="text-sm text-slate-400">
+                    {Number(rec.score_pct ?? 0).toFixed(1)}% → 目标 {Number(rec.target_pct ?? 0).toFixed(0)}%
+                  </span>
+                </div>
+                <ul className="text-sm text-slate-300 space-y-1 ml-6">
+                  {(rec.suggestions || []).map((suggestion, i) => (
+                    <li key={i}>• {suggestion}</li>
+                  ))}
+                </ul>
               </div>
-              <ul className="text-sm text-slate-300 space-y-1 ml-6">
-                {rec.suggestions.map((suggestion, i) => (
-                  <li key={i}>• {suggestion}</li>
-                ))}
-              </ul>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 

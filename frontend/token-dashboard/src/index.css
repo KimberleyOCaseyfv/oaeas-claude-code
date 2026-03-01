@@ -22,3 +22,17 @@ code {
 .nav-link {
   @apply px-3 py-2 rounded-md text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-700 transition-colors;
 }
+
+/* Print / PDF styles */
+@media print {
+  nav, header, .no-print { display: none !important; }
+  body { background: #fff !important; color: #111 !important; }
+  .bg-slate-800, .bg-slate-700\/50 {
+    background: #f8fafc !important;
+    border: 1px solid #e2e8f0 !important;
+  }
+  .text-slate-400 { color: #64748b !important; }
+  .text-slate-300 { color: #334155 !important; }
+  .bg-gradient-to-r { display: none !important; }
+  a[href]:after { content: none !important; }
+}

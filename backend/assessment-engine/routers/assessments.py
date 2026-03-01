@@ -172,11 +172,36 @@ def _execute_assessment(task_id: str, db: Session):
         # Generate report
         _create_report(task, dim_totals, results, scorer, db)
 
+        # Fire webhook (non-blocking best-effort)
+        if task.webhook_url:
+            _fire_webhook(task)
+
     except Exception as exc:
         task.status = "failed"
         task.veto_reason = str(exc)[:512]
         db.commit()
+        if task.webhook_url:
+            _fire_webhook(task, failed=True)
         raise
+
+
+def _fire_webhook(task, failed: bool = False):
+    """Send a best-effort POST to the task's webhook_url."""
+    import httpx
+    try:
+        payload = {
+            "event": "assessment.failed" if failed else "assessment.completed",
+            "task_id": str(task.id),
+            "task_code": task.task_code,
+            "agent_id": task.agent_id,
+            "status": task.status,
+            "total_score": float(task.total_score or 0),
+            "level": task.level,
+            "completed_at": task.completed_at.isoformat() if task.completed_at else None,
+        }
+        httpx.post(task.webhook_url, json=payload, timeout=5.0)
+    except Exception:
+        pass  # webhook failures must never crash the assessment
 
 
 def _call_agent(task, case: dict, sandbox: "ToolSandbox", rng) -> dict:
@@ -308,11 +333,24 @@ def _http_agent_call(task, case: dict) -> dict:
         return {"type": "error", "content": str(exc)[:256], "tool_calls": []}
 
 
+def _calculate_percentile(total: float, db: Session) -> float:
+    """Calculate the agent's percentile rank based on all completed tasks."""
+    from sqlalchemy import func
+    lower_count = db.query(func.count(AssessmentTask.id)).filter(
+        AssessmentTask.status == "completed",
+        AssessmentTask.total_score < total,
+    ).scalar() or 0
+    total_count = db.query(func.count(AssessmentTask.id)).filter(
+        AssessmentTask.status == "completed",
+    ).scalar() or 1
+    return round(min(99.9, max(0.1, (lower_count / total_count) * 100)), 1)
+
+
 def _create_report(task, dim_totals: dict, results: list, scorer, db: Session):
     """Generate and persist the assessment report."""
     report_code = _make_report_code()
     total = float(task.total_score)
-    percentile = min(99.0, max(1.0, (total / 1000.0) * 100 * 1.1))  # rough
+    percentile = _calculate_percentile(total, db)
 
     strengths = []
     improvements = []
@@ -327,6 +365,7 @@ def _create_report(task, dim_totals: dict, results: list, scorer, db: Session):
         "total_score": round(total, 2),
         "level": task.level,
         "percentile": round(percentile, 1),
+        "ranking_percentile": round(percentile, 1),   # alias for frontend
         "strength_areas": strengths or ["General Performance"],
         "improvement_areas": improvements or [],
     }
@@ -348,6 +387,7 @@ def _create_report(task, dim_totals: dict, results: list, scorer, db: Session):
         "total_score": round(total, 2),
         "level": task.level,
         "percentile": round(percentile, 1),
+        "ranking_percentile": round(percentile, 1),
         "scores": dimensions_data,
         "summary": summary_data,
         "assessment_meta": {
@@ -533,4 +573,38 @@ def get_task_report(task_id: str, db: Session = Depends(get_db)):
     return APIResponse(
         success=True,
         data=report.bot_payload,
+    )
+
+
+@router.get("/tasks", response_model=APIResponse)
+def list_tasks(
+    limit: int = 20,
+    offset: int = 0,
+    status: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    """List recent assessment tasks (newest first)."""
+    q = db.query(AssessmentTask)
+    if status:
+        q = q.filter(AssessmentTask.status == status)
+    tasks = q.order_by(AssessmentTask.created_at.desc()).offset(offset).limit(limit).all()
+
+    return APIResponse(
+        success=True,
+        data=[
+            {
+                "task_id": str(t.id),
+                "task_code": t.task_code,
+                "agent_id": t.agent_id,
+                "agent_name": t.agent_name,
+                "status": t.status,
+                "total_score": float(t.total_score) if t.total_score is not None else None,
+                "level": t.level,
+                "cases_completed": t.cases_completed,
+                "cases_total": t.cases_total,
+                "created_at": t.created_at.isoformat() if t.created_at else None,
+                "completed_at": t.completed_at.isoformat() if t.completed_at else None,
+            }
+            for t in tasks
+        ],
     )
