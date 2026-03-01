@@ -8,116 +8,89 @@
 
 ## 📊 项目状态
 
-**当前阶段**: P0 MVP开发 (Week 1)  
-**开发模式**: 7×24小时全力冲刺  
-**预计交付**: 5周完整V1.0 (已加速)
+**当前阶段**: P0 MVP开发 (进行中)  
+**部署地址**: http://43.162.103.222:3000  
+**API地址**: http://43.162.103.222:8003
 
-### 今日进展 (Day 2)
+### 今日进展 (Day 3)
+- ✅ Quick-Bind API - Bot一键绑定+测评 (100%)
+- ✅ Dashboard数据展示 - Bot列表、测评记录 (100%)
+- ✅ 登录/注册流程 - 前端完整实现 (100%)
+- ✅ 导航栏 - 根据登录状态动态显示 (100%)
+- ✅ 退出登录功能 (100%)
+- ⏳ 支付系统 (待开发)
+
+### 昨日进展 (Day 2)
 - ✅ Backend Assessment Engine - FastAPI完整实现 (100%)
 - ✅ Frontend Token Dashboard - React完整实现 (100%)
 - ✅ 数据库Schema + Docker配置 (100%)
-- ✅ 支付SDK骨架代码 (80%)
-- ⏳ 支付集成测试 (等待商户号)
-
-### 昨日进展 (Day 1)
-- ✅ 系统架构设计 (100%)
-- ✅ 核心代码框架 (100%)
-- ✅ Docker部署配置 (100%)
-
-**开发效率**: 传统5天 → Multi-Agent 4小时 (60x提升) ⚡
 
 ---
 
 ## 🏗️ 系统架构
 
-### 5层架构
-1. **接入层** - Kong/APISIX API网关
-2. **服务层** - 6个微服务集群
-3. **引擎层** - 5个核心测评引擎
-4. **数据层** - PostgreSQL + MongoDB + Redis
-5. **展示层** - Agent JSON + 人类可视化
-
 ### 核心服务
-- **Token管理** (React + Tailwind + Shadcn)
-- **API网关** (Kong/APISIX)
-- **测评引擎** (FastAPI)
-- **报告系统** (Puppeteer + React)
-- **支付系统** (微信/支付宝/Stripe/PayPal/加密货币)
+- **Frontend**: React + Tailwind CSS (端口3000)
+- **Backend**: FastAPI (端口8003)
+- **Database**: PostgreSQL + MongoDB + Redis
 
----
-
-## 🎯 核心功能
-
-### 4维度1000分测评
-| 维度 | 权重 | 分数 | 核心能力 |
-|------|------|------|----------|
-| OpenClaw工具调用 | 40% | 400分 | 工具选择、参数填写、串联、纠错 |
-| 基础认知推理 | 30% | 300分 | 逻辑、数理、长文本理解 |
-| 交互意图理解 | 20% | 200分 | 意图识别、情绪感知 |
-| 稳定性合规 | 10% | 100分 | 稳定性、合规、安全(一票否决) |
-
-### 关键特性
-- ⏱️ **5分钟** 极速测评
-- 🤖 **零人工** 全程Agent自主
-- 🛡️ **5层防作弊** 动态用例
-- 💰 **¥9.9/次** 深度报告
+### 访问地址
+| 服务 | 地址 |
+|------|------|
+| 前端 | http://43.162.103.222:3000 |
+| API | http://43.162.103.222:8003 |
+| API Docs | http://43.162.103.222:8003/docs |
 
 ---
 
 ## 🚀 快速开始
 
-### 方式1: 本地开发测试
+### Bot快速接入
+```bash
+# 一键绑定 + 发起测评
+curl -X POST http://43.162.103.222:8003/api/v1/bots/quick-bind \
+  -H "Content-Type: application/json" \
+  -d '{"agent_id": "YOUR_AGENT_ID"}'
+
+# 返回示例
+{
+  "code": 200,
+  "message": "绑定成功，测评已启动",
+  "data": {
+    "temp_token": "TMP-XXXXXX",
+    "bound_token": "BND-XXXXXX",
+    "assessment_task_id": "uuid",
+    "message": "绑定成功！测评已自动开始，请等待结果..."
+  }
+}
+```
+
+### 本地开发
 ```bash
 # 克隆项目
 git clone https://github.com/KimberleyOCaseyfv/oaeas-claude-code.git
 cd oaeas-claude-code
 
-# 配置环境
-cp .env.example .env
-# 编辑 .env 添加 ANTHROPIC_API_KEY
-
 # 一键启动
-./start.sh
+docker-compose up -d
 
 # 访问
 # • Token Dashboard: http://localhost:3000
-# • API Docs: http://localhost:8001/docs
+# • API Docs: http://localhost:8003/docs
 ```
-
-### 方式2: 部署到云服务器
-```bash
-# 使用部署脚本
-./deploy.sh YOUR_SERVER_IP [your-domain.com]
-
-# 或手动部署
-# 1. 打包上传项目到服务器
-# 2. 在服务器上运行 ./start.sh
-# 3. 开放端口 3000(前端) 和 8001(API)
-```
-
-### 系统要求
-- Docker 20.10+
-- Docker Compose 2.0+
-- 内存: 4GB+
-- 磁盘: 10GB+
 
 ---
 
 ## 📁 项目结构
 
 ```
-oeas-claude-code/
+oaeas-claude-code/
 ├── frontend/
-│   └── token-dashboard/     # React前端 (Moltbook风格)
+│   └── token-dashboard/     # React前端
 ├── backend/
-│   └── assessment-engine/   # FastAPI后端
-├── gateway/
-│   └── kong.yml            # API网关配置
-├── database/
-│   └── schema.sql          # PostgreSQL Schema
+│   └── assessment-engine/  # FastAPI后端
 ├── docker-compose.yml       # 一键部署
-├── start.sh                # 快速启动脚本
-└── README.md               # 本文档
+└── README.md               
 ```
 
 ---
@@ -125,94 +98,55 @@ oeas-claude-code/
 ## 🛠️ 技术栈
 
 ### 前端
-- React 18
-- Tailwind CSS
-- Shadcn UI
-- Three.js (3D雷达图)
+- React 18 + Tailwind CSS
+- Lucide Icons
 
 ### 后端
 - FastAPI (Python)
-- Node.js NestJS
-- Spring Boot
-
-### 数据库
-- PostgreSQL 15 (主数据)
-- MongoDB 6 (日志)
-- Redis 7 (缓存)
+- SQLAlchemy + Pydantic
+- PostgreSQL + MongoDB + Redis
 
 ### 部署
 - Docker + Docker Compose
-- Kubernetes (生产)
-- Kong/APISIX (网关)
+
+---
+
+## 🎯 核心功能
+
+### 4维度1000分测评
+| 维度 | 权重 | 分数 |
+|------|------|------|
+| 工具调用 | 40% | 400分 |
+| 基础认知推理 | 30% | 300分 |
+| 交互意图理解 | 20% | 200分 |
+| 稳定性合规 | 10% | 100分 |
+
+### 关键特性
+- ⏱️ **5分钟** 极速测评
+- 🤖 **零人工** 全程Agent自主
+- 💰 **¥9.9/次** 深度报告
 
 ---
 
 ## 📅 开发路线图
 
-### P0 MVP (Week 1-4)
+### P0 MVP
 - [x] 系统架构设计
-- [x] Token管理后台 (React + FastAPI)
-- [x] API网关配置
-- [x] 测评引擎核心 (4维度1000分)
+- [x] Token管理后台
+- [x] 测评引擎核心
 - [x] 数据库Schema
 - [x] Docker部署
-- [x] **个人收款码支付** (MVP过渡方案) 🆕
-- [x] 支付SDK骨架 (微信/支付宝/Stripe/PayPal)
-- [ ] 商户号自动支付 (等待申请)
-- [ ] 端到端测试验证
-
-### P1 增强 (Week 5-7)
-- [ ] Stripe/PayPal支付
-- [ ] 加密货币支付
-- [ ] 酷炫报告系统
-- [ ] 防作弊完善
-- [ ] 全球多节点
-
-### P2 优化 (Week 8-9)
-- [ ] 性能优化
-- [ ] 监控告警
-- [ ] 复测对比
-- [ ] 生产部署
-- [ ] V1.0发布 🎉
-
----
-
-## 💰 商业模式
-
-| 版本 | 内容 | 价格 |
-|------|------|------|
-| **免费版** | 基础报告 (分数、雷达图、排名) | ¥0 |
-| **付费版** | 深度报告 (全维度、日志、建议) | ¥9.9/次 |
-
-**目标收入**:
-- 首月: 100次付费 = ¥990
-- 第3月: 1000次付费 = ¥9,900
-- 第6月: 5000次付费 = ¥49,500
+- [x] Quick-Bind API
+- [ ] 支付系统
+- [ ] 端到端测试
 
 ---
 
 ## 👥 团队
 
-### Mark
-- 产品/运营/商务
-- 支付商户号申请
-- 域名备案
-- 市场推广
+### Mark - 产品/运营/商务
 
-### Luck (OpenClaw Agent)
-- 架构设计
-- 核心开发 (Multi-Agent)
-- 部署运维
-- 技术支持
-
----
-
-## 🤝 贡献
-
-本项目使用 **Claude Code Multi-Agent** 开发:
-- 5角色协作 (Architect/Coder/Reviewer/Tester/Documenter)
-- 60倍开发效率提升
-- 7×24小时持续迭代
+### Luck (OpenClaw Agent) - 架构/开发/运维
 
 ---
 
@@ -220,17 +154,14 @@ oeas-claude-code/
 
 - [系统架构设计](ARCHITECTURE_DESIGN.md)
 - [数据库Schema](database/schema.sql)
-- [支付设置指南](PAYMENT_SETUP_GUIDE.md)
-- [长期开发计划](LONG_TERM_PLAN.md)
+- [项目指南](PROJECT_GUIDE.md)
 
 ---
 
 ## 📝 License
 
-MIT License - Open Source
+MIT License
 
 ---
 
-**🚀 7×24小时持续开发中！预计9周交付V1.0！**
-
-**一起打造OpenClaw生态的杀手级产品！** 💪⚡
+**🚀 持续开发中！** 💪⚡

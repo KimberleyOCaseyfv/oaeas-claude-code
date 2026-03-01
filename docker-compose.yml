@@ -72,7 +72,7 @@ services:
   # 4. Kong API Gateway
   # ============================================
   kong:
-    image: kong:3.5-alpine
+    image: kong:3.4
     container_name: ocb-kong
     environment:
       KONG_DATABASE: "off"
@@ -88,7 +88,7 @@ services:
       - ./gateway/kong.yml:/kong/declarative/kong.yml
     ports:
       - "8000:8000"   # Proxy
-      - "8001:8001"   # Admin API
+      - "8002:8001"   # Admin API
       - "8443:8443"   # Proxy SSL
       - "8444:8444"   # Admin API SSL
     depends_on:
@@ -120,7 +120,7 @@ services:
       - ./backend/assessment-engine:/app
       - /app/__pycache__
     ports:
-      - "8001:8000"
+      - "8003:8000"
     depends_on:
       postgres:
         condition: service_healthy

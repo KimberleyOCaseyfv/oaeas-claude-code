@@ -1,0 +1,83 @@
+version: '3.8'
+
+# OAEAS 简化测试版 - 仅核心服务
+
+services:
+  # PostgreSQL - 主数据库
+  postgres:
+    image: postgres:15-alpine
+    container_name: ocb-postgres
+    environment:
+      POSTGRES_DB: ocbenchmark
+      POSTGRES_USER: ocbuser
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-ocbpassword123}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ocbuser -d ocbenchmark"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ocb-network
+
+  # Redis - 缓存
+  redis:
+    image: redis:7-alpine
+    container_name: ocb-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ocb-network
+
+  # Assessment Engine (FastAPI)
+  backend:
+    build:
+      context: ./backend/assessment-engine
+      dockerfile: Dockerfile
+    container_name: ocb-backend
+    environment:
+      - DATABASE_URL=postgresql://ocbuser:${DB_PASSWORD:-ocbpassword123}@postgres:5432/ocbenchmark
+      - REDIS_URL=redis://redis:6379/0
+      - JWT_SECRET=${JWT_SECRET:-ocbjwtsecret2026}
+      - ENV=production
+    ports:
+      - "8001:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - ocb-network
+    restart: unless-stopped
+
+  # Frontend (React + Nginx)
+  frontend:
+    build:
+      context: ./frontend/token-dashboard
+      dockerfile: Dockerfile
+    container_name: ocb-frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    networks:
+      - ocb-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  ocb-network:
+    driver: bridge

@@ -1,6 +1,6 @@
 import random
 import string
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
 from models.database import Token, AssessmentTask, TestCase, TestResult, Report, Ranking
@@ -64,7 +64,7 @@ class TokenService:
         if token.used_count >= token.max_uses:
             return False, "Token使用次数已达上限"
         
-        if token.expires_at and token.expires_at < datetime.utcnow():
+        if token.expires_at and token.expires_at.replace(tzinfo=timezone.utc) < datetime.now(timezone.utc):
             return False, "Token已过期"
         
         return True, None
@@ -145,7 +145,7 @@ class AssessmentService:
         
         # 更新状态为运行中
         task.status = TaskStatus.RUNNING.value
-        task.started_at = datetime.utcnow()
+        task.started_at = datetime.now(timezone.utc)
         db.commit()
         
         try:
@@ -163,7 +163,7 @@ class AssessmentService:
             task.total_score = task.tool_score + task.reasoning_score + task.interaction_score + task.stability_score
             task.level = cls.calculate_level(task.total_score)
             task.status = TaskStatus.COMPLETED.value
-            task.completed_at = datetime.utcnow()
+            task.completed_at = datetime.now(timezone.utc)
             
             # 计算持续时间
             if task.started_at:

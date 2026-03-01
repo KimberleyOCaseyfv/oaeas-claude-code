@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from database import get_db
 from schemas import PaymentCreate, PaymentResponse, APIResponse
-from backend.payment.payment_manager import PaymentManager
+from payment_manager import PaymentManager
 
 router = APIRouter(prefix="/payments", tags=["Payments"])
 payment_manager = PaymentManager()

@@ -1,6 +1,6 @@
-from sqlalchemy import create_engine, Column, String, Float, DateTime, Text, JSON, Integer
+from sqlalchemy import create_engine, Column, String, Float, DateTime, Text, JSON, Integer, Boolean, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, relationship
 from datetime import datetime
 import uuid
 
@@ -9,68 +9,125 @@ Base = declarative_base()
 def generate_uuid():
     return str(uuid.uuid4())
 
+# ============== 用户表 ==============
 class User(Base):
-    """用户表"""
+    """人类用户表"""
     __tablename__ = "users"
     
     id = Column(String, primary_key=True, default=generate_uuid)
     email = Column(String, unique=True, index=True)
     name = Column(String)
+    invite_code = Column(String, unique=True, index=True)
+    invite_code_expires_at = Column(DateTime)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+# ============== Token体系 (Agent-First) ==============
+
+class TempToken(Base):
+    """临时匿名Token - Bot冷启动用"""
+    __tablename__ = "temp_tokens"
+    
+    id = Column(String, primary_key=True, default=generate_uuid)
+    temp_token_code = Column(String(32), unique=True, index=True)
+    agent_id = Column(String(255), index=True)
+    agent_name = Column(String(255))
+    status = Column(String(50), default="active")  # active/expired/revoked/bound
+    created_at = Column(DateTime, default=datetime.utcnow)
+    expires_at = Column(DateTime)
+    bound_to_user_id = Column(String, ForeignKey("users.id"), nullable=True)
+
+class BoundToken(Base):
+    """正式绑定Token - 关联人类账户用"""
+    __tablename__ = "bound_tokens"
+    
+    id = Column(String, primary_key=True, default=generate_uuid)
+    token_code = Column(String(32), unique=True, index=True)
+    agent_id = Column(String(255), index=True)
+    user_id = Column(String, ForeignKey("users.id"))
+    invite_code = Column(String(32), index=True)  # 移除unique约束，支持多Bot使用同一邀请码
+    status = Column(String(50), default="active")  # active/revoked
+    created_at = Column(DateTime, default=datetime.utcnow)
+    revoked_at = Column(DateTime)
+
+class AgentBinding(Base):
+    """Agent-人类绑定关系表"""
+    __tablename__ = "agent_bindings"
+    
+    id = Column(String, primary_key=True, default=generate_uuid)
+    agent_id = Column(String(255), index=True)
+    user_id = Column(String, ForeignKey("users.id"))
+    invite_code = Column(String(32), index=True)
+    initiated_by = Column(String(50), default="bot")  # bot/user
+    bound_at = Column(DateTime, default=datetime.utcnow)
+    status = Column(String(50), default="active")  # active/unbound
+
+# ============== 旧版Token表（兼容保留）=============
 class Token(Base):
-    """测评Token表"""
+    """测评Token表 - 旧版"""
     __tablename__ = "tokens"
     
     id = Column(String, primary_key=True, default=generate_uuid)
-    token_code = Column(String, unique=True, index=True)  # OCB-XXXX-XXXX
+    token_code = Column(String(20), unique=True, index=True)
     name = Column(String)
     description = Column(Text)
-    agent_type = Column(String)  # general/coding/creative
-    status = Column(String, default="active")  # active/paused/expired
+    agent_type = Column(String)
+    status = Column(String, default="active")
     max_uses = Column(Integer, default=100)
     used_count = Column(Integer, default=0)
-    created_by = Column(String)  # user_id
+    created_by = Column(String)
     created_at = Column(DateTime, default=datetime.utcnow)
     expires_at = Column(DateTime, nullable=True)
+
+# ============== 测评相关表 ==============
 
 class AssessmentTask(Base):
     """测评任务表"""
     __tablename__ = "assessment_tasks"
     
     id = Column(String, primary_key=True, default=generate_uuid)
-    task_code = Column(String, unique=True, index=True)  # OCBT-XXXXXXXX
-    token_id = Column(String, index=True)
-    agent_id = Column(String)  # 被测Agent标识
+    task_code = Column(String(30), unique=True, index=True)
+    
+    # Token关联（新版双Token体系）
+    temp_token_id = Column(String, ForeignKey("temp_tokens.id"), nullable=True)
+    bound_token_id = Column(String, ForeignKey("bound_tokens.id"), nullable=True)
+    
+    # 旧版兼容
+    token_id = Column(String, index=True, nullable=True)
+    
+    agent_id = Column(String(255), index=True)
     agent_name = Column(String)
-    status = Column(String, default="pending")  # pending/running/completed/failed
+    initiated_by = Column(String(50), default="bot")  # bot/human
+    status = Column(String, default="pending")
+    callback_url = Column(String(500))
     
-    # 4维度评分 (0-1000)
-    tool_score = Column(Float, default=0)  # OpenClaw工具调用 400分
-    reasoning_score = Column(Float, default=0)  # 基础认知推理 300分
-    interaction_score = Column(Float, default=0)  # 交互意图理解 200分
-    stability_score = Column(Float, default=0)  # 稳定性合规 100分
-    total_score = Column(Float, default=0)  # 总分
+    tool_score = Column(Float, default=0)
+    reasoning_score = Column(Float, default=0)
+    interaction_score = Column(Float, default=0)
+    stability_score = Column(Float, default=0)
+    total_score = Column(Float, default=0)
     
-    level = Column(String)  # Novice/Proficient/Expert/Master
+    level = Column(String)
     duration_seconds = Column(Integer)
     
     created_at = Column(DateTime, default=datetime.utcnow)
     started_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
+    
+    # 关系
+    report = relationship("Report", back_populates="task", uselist=False)
 
 class TestCase(Base):
     """测试用例表"""
     __tablename__ = "test_cases"
     
     id = Column(String, primary_key=True, default=generate_uuid)
-    case_type = Column(String)  # tool/reasoning/interaction/stability
-    difficulty = Column(String)  # easy/medium/hard
-    content = Column(JSON)  # 用例内容
+    case_type = Column(String)
+    difficulty = Column(String)
+    content = Column(JSON)
     expected_result = Column(JSON)
-    weight = Column(Float, default=1.0)  # 权重
-    tags = Column(JSON, default=list)  # 标签
+    weight = Column(Float, default=1.0)
+    tags = Column(JSON, default=list)
 
 class TestResult(Base):
     """测试结果表"""
@@ -79,13 +136,11 @@ class TestResult(Base):
     id = Column(String, primary_key=True, default=generate_uuid)
     task_id = Column(String, index=True)
     case_id = Column(String, index=True)
-    
-    status = Column(String)  # passed/failed/error
+    status = Column(String)
     score = Column(Float, default=0)
     response_time_ms = Column(Integer)
     actual_result = Column(JSON)
     error_message = Column(Text, nullable=True)
-    
     created_at = Column(DateTime, default=datetime.utcnow)
 
 class Report(Base):
@@ -93,35 +148,48 @@ class Report(Base):
     __tablename__ = "reports"
     
     id = Column(String, primary_key=True, default=generate_uuid)
-    report_code = Column(String, unique=True, index=True)  # OCR-XXXXXXXX
-    task_id = Column(String, index=True)
+    report_code = Column(String(30), unique=True, index=True)
+    task_id = Column(String, ForeignKey("assessment_tasks.id"), index=True)
     
-    # 报告内容
-    summary = Column(JSON)  # 摘要数据
-    dimensions = Column(JSON)  # 各维度详情
-    test_cases = Column(JSON)  # 测试用例结果
-    recommendations = Column(JSON)  # 改进建议
-    ranking_percentile = Column(Float)  # 排名百分位
+    report_type = Column(String(50), default="full")  # free/full
     
-    is_deep_report = Column(Integer, default=0)  # 0=免费版 1=深度版
+    summary = Column(JSON)
+    dimensions = Column(JSON)
+    test_cases = Column(JSON)
+    recommendations = Column(JSON)
+    ranking_percentile = Column(Float)
+    
+    json_report = Column(JSON)
+    webhook_url = Column(String(500))
+    webhook_delivered = Column(Boolean, default=False)
+    webhook_delivered_at = Column(DateTime)
+    
+    is_deep_report = Column(Integer, default=0)
     unlocked_at = Column(DateTime, nullable=True)
-    
     created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # 关系
+    task = relationship("AssessmentTask", back_populates="report")
 
 class PaymentOrder(Base):
     """支付订单表"""
     __tablename__ = "payment_orders"
     
     id = Column(String, primary_key=True, default=generate_uuid)
-    order_code = Column(String, unique=True, index=True)  # OCBYYYYMMDDHHMMSS+6位
+    order_code = Column(String(50), unique=True, index=True)
     user_id = Column(String, index=True)
+    agent_id = Column(String(255), index=True)
     task_id = Column(String, index=True)
     report_id = Column(String, index=True)
     
     amount = Column(Float)
     currency = Column(String, default="CNY")
-    channel = Column(String)  # wechat/alipay/stripe/paypal
-    status = Column(String, default="pending")  # pending/paid/failed/refunded
+    channel = Column(String)
+    status = Column(String, default="pending")
+    
+    unlock_webhook_url = Column(String(500))
+    webhook_notified = Column(Boolean, default=False)
+    refund_eligible_until = Column(DateTime)
     
     paid_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -131,12 +199,14 @@ class Ranking(Base):
     __tablename__ = "rankings"
     
     id = Column(String, primary_key=True, default=generate_uuid)
+    agent_id = Column(String(255), index=True)
     agent_name = Column(String, index=True)
     agent_type = Column(String)
     total_score = Column(Float)
     level = Column(String)
     rank = Column(Integer)
     task_count = Column(Integer, default=1)
+    is_bound = Column(Boolean, default=False)
     updated_at = Column(DateTime, default=datetime.utcnow)
 
 class SystemConfig(Base):

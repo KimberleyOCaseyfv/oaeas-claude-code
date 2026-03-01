@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { Download, TrendingUp, Award, Lightbulb, Share2 } from 'lucide-react';
+import { Download, TrendingUp, Award, Lightbulb, Share2, FileText } from 'lucide-react';
 import api from '../services/api';
+import auth from '../utils/auth';
 
 function ReportView() {
   const { reportCode } = useParams();
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [downloading, setDownloading] = useState(false);
 
   useEffect(() => {
     fetchReport();
@@ -39,9 +41,48 @@ function ReportView() {
     alert('报告链接已复制！');
   };
 
-  const handleDownload = () => {
-    // TODO: 实现PDF下载
-    alert('PDF下载功能开发中...');
+  const handleDownloadPDF = async () => {
+    if (!report || !report.task_id) {
+      alert('报告信息不完整');
+      return;
+    }
+    
+    setDownloading(true);
+    try {
+      // 获取当前用户的token
+      const token = auth.getToken();
+      if (!token) {
+        alert('请先登录');
+        return;
+      }
+      
+      // 调用PDF下载API
+      const response = await api.get(
+        `/bots/reports/${reportCode}/pdf`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          },
+          responseType: 'blob'
+        }
+      );
+      
+      // 创建下载链接
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `OAEAS_Report_${reportCode}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      
+    } catch (error) {
+      console.error('PDF下载失败:', error);
+      alert('PDF下载失败，请稍后重试');
+    } finally {
+      setDownloading(false);
+    }
   };
 
   if (loading) {
@@ -75,6 +116,14 @@ function ReportView() {
             <div className={`px-4 py-2 rounded-lg border-2 font-bold ${getLevelColor(summary.level)}`}>
               {summary.level}
             </div>
+            <button
+              onClick={handleDownloadPDF}
+              disabled={downloading}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 rounded-lg font-medium text-sm"
+            >
+              <FileText className="w-4 h-4" />
+              {downloading ? '生成中...' : 'PDF'}
+            </button>
             <button
               onClick={handleShare}
               className="p-2 bg-slate-700 hover:bg-slate-600 rounded-lg"

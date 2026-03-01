@@ -16,7 +16,9 @@ function Rankings() {
       setLoading(true);
       const params = filter !== 'all' ? { agent_type: filter } : {};
       const response = await api.get('/rankings', { params });
-      setRankings(response.data.data || []);
+      // API返回格式: { code, message, data: { items: [], total: n } }
+      const data = response.data.data || {};
+      setRankings(data.items || []);
     } catch (error) {
       console.error('Failed to fetch rankings:', error);
     } finally {

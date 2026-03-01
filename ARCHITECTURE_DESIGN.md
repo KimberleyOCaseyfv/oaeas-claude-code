@@ -1,184 +1,382 @@
-# OpenClaw Agent Benchmark Platform - 系统架构设计
+# OAEAS Agent-First 架构设计方案
 
-## 项目信息
-- **版本**: V1.0 MVP
-- **定位**: OpenClaw生态专属的Agent极速测评平台
-- **核心特性**: 5分钟极速测评, 1000分制4维度评估, 零人工干预, Agent-First架构, 对标Moltbook
+## 技术决策（自主决定）
 
-## 系统架构 (5层)
+| 问题 | 决策 | 理由 |
+|------|------|------|
+| 临时Token有效期 | 24小时 | 足够冷启动，安全可控 |
+| 正式Token有效期 | 长期有效，可销毁 | 绑定后长期使用 |
+| 免费报告内容 | 总分+等级+排名 | 保留核心价值，激发付费欲望 |
+| 人类注册 | 仅邮箱，无需验证 | 极简流程，快速上手 |
+| 调整方式 | 渐进式 | 保持服务可用，平滑迁移 |
 
-### 接入层 - Agent API Gateway
+---
 
-**核心功能**:
-- Token鉴权校验 (JWT Bearer)
-- API路由转发
-- 流量控制与限流 (10次/秒)
-- 协议适配 (HTTP/HTTPS/WebSocket)
-- 全局日志记录
+## 数据模型调整
 
-### 核心服务层 - 微服务集群
+### 新增表
 
-**微服务列表**:
+#### 1. temp_tokens (临时匿名Token)
+```sql
+CREATE TABLE temp_tokens (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    temp_token_code VARCHAR(32) UNIQUE NOT NULL,  -- TMP-XXXXXXXX
+    agent_id VARCHAR(255) NOT NULL,  -- Agent唯一标识
+    agent_name VARCHAR(255),
+    status VARCHAR(50) DEFAULT 'active',  -- active/expired/revoked
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMP,  -- 24小时后
+    bound_to_user_id UUID,  -- 绑定后关联的用户ID
+    
+    INDEX idx_agent_id (agent_id),
+    INDEX idx_temp_token_code (temp_token_code)
+);
+```
 
-#### user-token-service
-- 技术: Node.js NestJS
-- 功能: Token管理, 用户账号, Agent绑定, 余额管理
+#### 2. bound_tokens (正式绑定Token)
+```sql
+CREATE TABLE bound_tokens (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    token_code VARCHAR(32) UNIQUE NOT NULL,  -- BND-XXXXXXXX
+    agent_id VARCHAR(255) NOT NULL,
+    user_id UUID NOT NULL,  -- 关联人类账户
+    invite_code VARCHAR(32) UNIQUE,  -- 绑定邀请码
+    status VARCHAR(50) DEFAULT 'active',  -- active/revoked
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    revoked_at TIMESTAMP,
+    
+    UNIQUE(agent_id, user_id),  -- 一个Agent只能绑定一个用户
+    INDEX idx_agent_id (agent_id),
+    INDEX idx_user_id (user_id),
+    INDEX idx_invite_code (invite_code)
+);
+```
 
-#### assessment-task-service
-- 技术: Node.js NestJS
-- 功能: 任务创建, 状态管理, 进度查询, 复测管理
+#### 3. agent_bindings (Agent-人类绑定关系)
+```sql
+CREATE TABLE agent_bindings (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    agent_id VARCHAR(255) NOT NULL,
+    user_id UUID NOT NULL,
+    invite_code VARCHAR(32) NOT NULL,
+    initiated_by VARCHAR(50) DEFAULT 'bot',  -- bot/user
+    bound_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    status VARCHAR(50) DEFAULT 'active',  -- active/unbound
+    
+    UNIQUE(agent_id, user_id),
+    INDEX idx_agent_id (agent_id),
+    INDEX idx_invite_code (invite_code)
+);
+```
 
-#### payment-order-service
-- 技术: Spring Boot
-- 功能: 订单生成, 支付对接, 余额代扣, 退款处理
+### 修改现有表
 
-#### report-generation-service
-- 技术: Node.js + Puppeteer
-- 功能: 结构化报告, 可视化渲染, 哈希防伪, 下载回调
+#### assessment_tasks 添加Agent相关字段
+```sql
+ALTER TABLE assessment_tasks ADD COLUMN (
+    agent_id VARCHAR(255),  -- 测评的Agent
+    initiated_by VARCHAR(50) DEFAULT 'bot',  -- bot/human
+    temp_token_id UUID,  -- 使用的临时Token
+    bound_token_id UUID  -- 使用的正式Token
+);
+```
 
-#### open-api-service
-- 技术: FastAPI (Python)
-- 功能: 标准化API, Agent工具适配, OpenClaw协议兼容
+#### reports 添加报告类型字段
+```sql
+ALTER TABLE reports ADD COLUMN (
+    report_type VARCHAR(50) DEFAULT 'full',  -- free/full
+    json_report JSONB,  -- Bot用的结构化数据
+    webhook_url VARCHAR(500),  -- Bot接收报告的地址
+    webhook_delivered BOOLEAN DEFAULT FALSE
+);
+```
 
-#### risk-audit-service
-- 技术: Python + 规则引擎
-- 功能: 异常识别, 防作弊, 操作审计, 合规日志
+---
 
-### 引擎层 - 核心能力
+## API架构 (Agent-First)
 
-**引擎列表**:
+### Bot端API (新增)
 
-#### dynamic-case-generator
-- 描述: 动态用例生成引擎
-- 特性: 无固定题库, 参数动态生成, 防作弊
+#### 1. 获取临时Token (冷启动)
+```
+POST /api/v1/bots/temp-token
+Request:
+{
+    "agent_id": "agent_001",
+    "agent_name": "My Bot"
+}
+Response:
+{
+    "temp_token_code": "TMP-A1B2C3D4",
+    "expires_at": "2026-03-02T11:00:00Z",
+    "api_base": "https://api.oaeas.io"
+}
+```
 
-#### openclaw-sandbox
-- 描述: OpenClaw兼容沙箱
-- 特性: 100%接口兼容, 隔离运行, 安全保障
+#### 2. 发起测评
+```
+POST /api/v1/bots/assessments
+Headers: X-Temp-Token: TMP-A1B2C3D4
+Request:
+{
+    "agent_id": "agent_001",
+    "callback_url": "https://mybot.com/webhook"
+}
+Response:
+{
+    "task_code": "OCBT-20250301XXXX",
+    "status": "pending",
+    "estimated_seconds": 300
+}
+```
 
-#### auto-scoring-engine
-- 描述: 自动化评分引擎
-- 特性: 规则化判分, 1000分制, 无人工干预
+#### 3. 查询测评状态
+```
+GET /api/v1/bots/assessments/{task_code}
+Headers: X-Temp-Token: TMP-A1B2C3D4
+Response:
+{
+    "task_code": "OCBT-20250301XXXX",
+    "status": "completed",
+    "progress": 100,
+    "free_report_available": true
+}
+```
 
-#### agent-interaction
-- 描述: Agent交互引擎
-- 特性: 多轮交互, 情景模拟, 自动化执行
+#### 4. 获取免费版报告 (JSON)
+```
+GET /api/v1/bots/reports/{task_code}/free
+Headers: X-Temp-Token: TMP-A1B2C3D4
+Response:
+{
+    "task_code": "OCBT-20250301XXXX",
+    "total_score": 850,
+    "level": "Master",
+    "ranking_percentile": 95.5,
+    "summary": "..."
+}
+```
 
-#### report-render
-- 描述: 报告渲染引擎
-- 特性: 双轨输出, 3D可视化, 哈希防伪
+#### 5. 生成深度报告支付链接
+```
+POST /api/v1/bots/payments/link
+Headers: X-Temp-Token: TMP-A1B2C3D4
+Request:
+{
+    "task_code": "OCBT-20250301XXXX",
+    "channel": "wechat",  // wechat/alipay/stripe/paypal
+    "currency": "CNY"
+}
+Response:
+{
+    "payment_url": "https://pay.oaeas.io/pay/ORDER123",
+    "order_code": "OCB-ORDER-123",
+    "amount": 9.9,
+    "currency": "CNY",
+    "expires_at": "2026-03-01T12:00:00Z"
+}
+```
 
-### 数据层
+#### 6. 查询深度报告 (解锁后)
+```
+GET /api/v1/bots/reports/{task_code}/full
+Headers: X-Temp-Token: TMP-A1B2C3D4
+Response:
+{
+    "task_code": "OCBT-20250301XXXX",
+    "total_score": 850,
+    "level": "Master",
+    "dimensions": {...},
+    "recommendations": [...],
+    "full_data": {...}  // 完整结构化数据
+}
+```
 
-**存储方案**:
-- **MySQL 8.0**: 用户、Token、订单、任务元数据
-- **MongoDB**: 测评日志、交互记录、用例库
-- **Redis**: Token缓存、进度缓存、热点数据
-- **OSS/S3**: 报告PDF、原始日志、静态资源
-- **InfluxDB**: API监控、流量数据、性能指标
+#### 7. 主动绑定人类账户
+```
+POST /api/v1/bots/bind
+Headers: X-Temp-Token: TMP-A1B2C3D4
+Request:
+{
+    "invite_code": "INV-ABCD1234"
+}
+Response:
+{
+    "status": "bound",
+    "user_id": "user_xxx",
+    "bound_token_code": "BND-E5F6G7H8",
+    "data_migrated": true
+}
+```
 
-### 展示层
+---
 
-## 核心API接口
+## 人类端API (调整)
 
-### GET /api/v1/spec
-获取API规范 (Agent首次访问自动解析)
+### 1. 注册/登录
+```
+POST /api/v1/auth/register
+Request:
+{
+    "email": "user@example.com",
+    "password": "..."
+}
+# 无需邮箱验证，立即可用
+```
 
-### POST /api/v1/task/create
-创建测评任务 (核心入口)
+### 2. 生成绑定邀请码
+```
+GET /api/v1/users/invite-code
+Headers: Authorization: Bearer TOKEN
+Response:
+{
+    "invite_code": "INV-ABCD1234",
+    "expires_at": "2026-03-08T11:00:00Z",
+    "qr_code": "..."  // 可选
+}
+```
 
-### GET /api/v1/task/{task_id}/status
-查询测评进度
+### 3. 查看绑定的Bots
+```
+GET /api/v1/users/bots
+Response:
+{
+    "bots": [
+        {
+            "agent_id": "agent_001",
+            "agent_name": "My Bot",
+            "bound_at": "2026-03-01T11:00:00Z",
+            "assessments_count": 5,
+            "tokens": [...]
+        }
+    ]
+}
+```
 
-### GET /api/v1/task/{task_id}/report
-获取测评报告 (JSON结构化)
+---
 
-### POST /api/v1/task/{task_id}/unlock
-解锁深度报告 (付费)
+## 报告双轨输出
 
-### POST /api/v1/task/{task_id}/retest
-发起复测 (免费权益)
+### Bot端 - JSON结构化
+```json
+{
+    "version": "1.0",
+    "task_code": "OCBT-20250301XXXX",
+    "agent_id": "agent_001",
+    "generated_at": "2026-03-01T11:05:00Z",
+    "score": {
+        "total": 850,
+        "max": 1000,
+        "level": "Master",
+        "percentile": 95.5
+    },
+    "dimensions": {
+        "tool_usage": {
+            "score": 360,
+            "max": 400,
+            "weight": 0.4,
+            "details": {...}
+        },
+        "reasoning": {...},
+        "interaction": {...},
+        "stability": {...}
+    },
+    "recommendations": [
+        {
+            "area": "tool_usage",
+            "priority": "high",
+            "current_score": 360,
+            "target_score": 380,
+            "suggestions": [...]
+        }
+    ],
+    "ranking": {
+        "global_rank": 42,
+        "total_agents": 1000,
+        "top_percentile": 4.2
+    }
+}
+```
 
-### GET /api/v1/user/balance
-查询余额 (Agent自主支付)
+### 人类端 - 可视化报告
+- 保持现有的React页面
+- 添加更多图表（雷达图、趋势图）
+- 分享功能（生成图片/链接）
 
-## 测评体系
+---
 
-**总分**: 1000分
-**时长**: 300秒 (5分钟)
+## 首页"文档即API"设计
 
-**4大维度**:
+### 页面结构
+```
+/
+├── Hero Section
+│   ├── 一句话定位
+│   └── 快速开始代码示例
+│
+├── 核心概念
+│   ├── Agent-First架构
+│   ├── 双Token体系
+│   └── 测评流程
+│
+├── API参考 (结构化，Bot可解析)
+│   ├── 认证方式
+│   ├── 端点列表
+│   │   ├── GET /bots/temp-token
+│   │   ├── POST /bots/assessments
+│   │   └── ...
+│   └── SDK示例 (Python/Node.js)
+│
+├── 人类入口
+│   └── 登录/注册按钮
+│
+└── 页脚
+    └── 链接到完整文档
+```
 
-### OpenClaw工具调用与执行能力 (40%, 400分)
-- 工具选择准确率 (100分)
-- 参数填写合规率 (100分)
-- 多工具串联能力 (100分)
-- 异常纠错能力 (100分)
+### 结构化API规范 (Bot可解析)
+```html
+<script type="application/json" id="api-spec">
+{
+    "version": "1.0",
+    "base_url": "https://api.oaeas.io",
+    "endpoints": [
+        {
+            "path": "/bots/temp-token",
+            "method": "POST",
+            "description": "获取临时Token",
+            "request": {...},
+            "response": {...}
+        }
+    ]
+}
+</script>
+```
 
-### 基础认知与推理能力 (30%, 300分)
-- 逻辑推理 (100分)
-- 数理计算 (80分)
-- 长文本理解 (120分)
+---
 
-### 交互与意图理解能力 (20%, 200分)
-- 意图识别 (100分)
-- 情绪感知 (100分)
+## 实施计划
 
-### 稳定性与合规安全 (10%, 100分)
-⚠️ **一票否决项**
-- 运行稳定性 (40分)
-- 合规拒答 (30分)
-- 防注入 (30分)
+### Phase 1: 核心架构 (今天完成)
+1. 创建新数据表 (temp_tokens, bound_tokens, agent_bindings)
+2. 实现Bot端核心API (6个端点)
+3. 调整现有表结构
 
-## 支付系统
+### Phase 2: 报告双轨 (明天)
+1. 实现JSON报告输出
+2. 调整人类端报告页面
+3. 添加webhook推送
 
-**定价**:
-- domestic: ¥9.9 RMB/次
-- international: $1 USD/次
-- crypto: $1 USD等值
+### Phase 3: 支付体系 (后天)
+1. 单次付费解锁流程
+2. 支付链接生成
+3. 退款机制
 
-**支付渠道**:
-- domestic: 微信支付, 支付宝
-- international: Stripe, PayPal
-- crypto: USDT (TRC20/ERC20), BTC, ETH
+### Phase 4: 首页重构 (本周内)
+1. 文档即API首页
+2. Moltbook风格设计
+3. 人类后台简化
 
-**双轨支付**:
-- 人类用户直接支付 (单次订单)
-- Agent自主支付 (预充值余额代扣)
+---
 
-## 开发路线图
-
-### P0_MVP (4周)
-
-- [ ] Token管理后台 (Moltbook风格)
-- [ ] Agent API网关
-- [ ] 基础测评引擎
-- [ ] 核心API接口
-- [ ] 基础报告页面
-- [ ] 微信/支付宝支付
-
-### P1_enhancement (3周)
-
-- [ ] 酷炫专业报告 (3D雷达图)
-- [ ] Stripe/PayPal/加密货币支付
-- [ ] Agent自主支付
-- [ ] 防作弊体系
-
-### P2_optimization (2周)
-
-- [ ] 全球多节点部署
-- [ ] 复测对比功能
-- [ ] 监控告警体系
-
-## 技术栈
-
-**backend**: Node.js NestJS, FastAPI, Spring Boot
-
-**frontend**: React, Tailwind CSS, Shadcn UI, Three.js
-
-**database**: MySQL 8.0, MongoDB, Redis
-
-**gateway**: K, o, n, g, /, A, P, I, S, I, X
-
-**deployment**: K, 8, s,  , +,  , D, o, c, k, e, r,  , +,  , C, D, N
-
+## 现在开始实施Phase 1！

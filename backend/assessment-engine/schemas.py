@@ -152,10 +152,20 @@ class RankingList(BaseModel):
 
 # ============== API Response ==============
 
+from fastapi.encoders import jsonable_encoder
+from typing import Union, List, Dict, Any, Optional
+
 class APIResponse(BaseModel):
     code: int = 200
     message: str = "success"
-    data: Optional[Any] = None
+    data: Optional[Union[Dict[str, Any], List[Any]]] = None
+    
+    def model_dump(self, **kwargs):
+        # 使用jsonable_encoder确保所有类型都可序列化
+        d = super().model_dump(**kwargs)
+        if self.data is not None:
+            d['data'] = jsonable_encoder(self.data)
+        return d
 
 class ErrorResponse(BaseModel):
     code: int

@@ -3,10 +3,10 @@ from sqlalchemy.orm import sessionmaker, Session
 from models.database import Base
 import os
 
-# Database configuration
+# Database configuration - 使用容器名而不是localhost
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql://ocbuser:ocbpassword123@localhost:5432/ocbenchmark"
+    "postgresql://ocbuser:ocbpassword123@ocb-postgres:5432/ocbenchmark"
 )
 
 engine = create_engine(DATABASE_URL)
